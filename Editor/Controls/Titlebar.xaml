@@ -1,0 +1,39 @@
+<UserControl x:Class="Editor.Controls.TitleBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+             Height="26">
+
+    <Grid Background="#252526">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Text="My Editor"
+                   VerticalAlignment="Center"
+                   Margin="8,0,0,0"
+                   Foreground="White"
+                   FontSize="12" />
+
+        <Button Grid.Column="1"
+                Content="&#xE921;"
+                Click="Minimize_Click"
+                Style="{StaticResource TitleBarButtonStyle}"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True" />
+
+        <Button Grid.Column="2"
+                Content="&#xE922;"
+                Click="Maximize_Click"
+                Style="{StaticResource TitleBarButtonStyle}"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True" />
+
+        <Button Grid.Column="3"
+                Content="&#xE8BB;"
+                Click="Close_Click"
+                Style="{StaticResource CloseButtonStyle}"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True" />
+    </Grid>
+</UserControl>
