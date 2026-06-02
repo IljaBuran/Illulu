@@ -4,6 +4,8 @@
 
 #include "Core/Window.h"
 
+#include <format>
+
 extern "C"
 {
     __declspec(dllexport) extern const UINT D3D12SDKVersion = 619;
@@ -20,9 +22,11 @@ i32 WinMain(
     win.Initialize();
     win.Show();
 
-    while (true)
+    while (!win.ShouldClose())
     {
         win.PullMessages();
+
+        Sleep(1000/60);
     }
 
     return 0;
