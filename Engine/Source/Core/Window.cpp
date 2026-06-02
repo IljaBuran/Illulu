@@ -20,7 +20,7 @@ void Illulu::Window::Initialize() noexcept
 
     constexpr DWORD winStyle = WS_OVERLAPPEDWINDOW;
 
-    // make size of client window 3/4 of the monitor's size
+    // size of client window = 3/4 * the monitor's size
     i32 monitorWidth = GetSystemMetrics(SM_CXSCREEN);
     i32 monitorHeight = GetSystemMetrics(SM_CYSCREEN);
 

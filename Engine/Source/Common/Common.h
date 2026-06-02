@@ -1,4 +1,4 @@
 #pragma once
 
-#include "Types.h"
-
+#include "Common/Types.h"
+#include "Common/Debug.h"

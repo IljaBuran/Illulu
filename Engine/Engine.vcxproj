@@ -117,6 +117,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Common\Debug.h" />
     <ClInclude Include="Source\Core\Input.h" />
     <ClInclude Include="Source\Common\Common.h" />
     <ClInclude Include="Source\Common\Types.h" />

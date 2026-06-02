@@ -4,8 +4,6 @@
 
 #include "Core/Window.h"
 
-#include <format>
-
 extern "C"
 {
     __declspec(dllexport) extern const UINT D3D12SDKVersion = 619;
