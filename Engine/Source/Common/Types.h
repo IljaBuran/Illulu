@@ -15,6 +15,8 @@ using u64 = uint64_t;
 using f32 = float;
 using f64 = double;
 
+#define ILL_TEXT(str) L##str
+
 #if UNICODE
 	using tchar = wchar_t;
 #else

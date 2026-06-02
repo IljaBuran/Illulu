@@ -36,6 +36,6 @@ namespace Illulu
         bool m_focused     = false;
         bool m_shouldClose = false;
 
-        static constexpr const tchar* WINDOW_CLASS_NAME = TEXT("IlluluWndClass");
+        static constexpr const tchar* WINDOW_CLASS_NAME = ILL_TEXT("IlluluWndClass");
     };
 }
