@@ -23,6 +23,7 @@ namespace Illulu
         bool ShouldClose() const noexcept;
         // todo: change the return type
         std::pair<i32, i32> GetClientSize() const noexcept;
+        HWND GetNativeWindowHandle() const noexcept;
 
     private:
 

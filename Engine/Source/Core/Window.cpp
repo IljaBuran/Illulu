@@ -74,6 +74,11 @@ std::pair<i32, i32> Illulu::Window::GetClientSize() const noexcept
     return { m_width, m_height };
 }
 
+HWND Illulu::Window::GetNativeWindowHandle() const noexcept
+{
+    return m_hWnd;
+}
+
 #include <format>
 
 LRESULT Illulu::Window::_HandleMessages(u32 uMsg, WPARAM wParam, LPARAM lParam) noexcept

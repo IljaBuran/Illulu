@@ -17,9 +17,12 @@ void Illulu::Engine::Run() noexcept
 
 void Illulu::Engine::Initialize() noexcept
 {
-    
     m_window.OnInitialize();
-    m_renderer.OnInitialize();
+    HWND hWnd = m_window.GetNativeWindowHandle();
+    auto [width, height] = m_window.GetClientSize();
+    m_renderer.OnInitialize(hWnd, width, height);
+
+
     m_window.Show();
 }
 
