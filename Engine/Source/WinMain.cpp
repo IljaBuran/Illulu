@@ -2,7 +2,7 @@
 
 #include "WindowsMin.h"
 
-#include "Core/Window.h"
+#include "Core/Engine.h"
 
 extern "C"
 {
@@ -16,16 +16,8 @@ i32 WinMain(
     [[maybe_unused]] LPSTR lpCmdLine,
     [[maybe_unused]] i32 nCmdShow)
 {
-    Illulu::Window win;
-    win.Initialize();
-    win.Show();
-
-    while (!win.ShouldClose())
-    {
-        win.PullMessages();
-
-        Sleep(1000/60);
-    }
-
+    Illulu::Engine engine;
+    engine.Run();
+    
     return 0;
 }

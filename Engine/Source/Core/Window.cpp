@@ -1,7 +1,14 @@
 #include "Core/Window.h"
 
-#include "Common/Common.h"
-#include "Common/WindowsMin.h"
+#include "Core/Input.h"
+
+#include "Common.h"
+#include "WindowsMin.h"
+
+Illulu::Window::Window(Input& input)
+    : m_input(input)
+{
+}
 
 Illulu::Window::~Window()
 {
@@ -9,7 +16,7 @@ Illulu::Window::~Window()
     UnregisterClass(WINDOW_CLASS_NAME, GetModuleHandle(nullptr));
 }
 
-void Illulu::Window::Initialize() noexcept
+void Illulu::Window::OnInitialize() noexcept
 {
     _RegisterWindowClass();
     constexpr DWORD winStyle = WS_OVERLAPPEDWINDOW;
@@ -46,7 +53,7 @@ void Illulu::Window::Show() const noexcept
     ShowWindow(m_hWnd, SW_SHOW);
 }
 
-void Illulu::Window::PullMessages() noexcept
+void Illulu::Window::OnUpdate() noexcept
 {
     MSG msg{};
 
@@ -75,8 +82,17 @@ LRESULT Illulu::Window::_HandleMessages(u32 uMsg, WPARAM wParam, LPARAM lParam) 
     {
         case WM_KEYDOWN:
         {
-            //u32 keyPressed = LOWORD(lParam);
+            ILL_ASSERT(ILL_TEXT(""), wParam < 0xFF);
             
+            m_input.NotifyKeyDown(static_cast<keyCode>(wParam));
+            return 0;
+        }
+
+        case WM_KEYUP:
+        {
+            ILL_ASSERT(ILL_TEXT(""), wParam < 0xFF);
+
+            m_input.NotifyKeyUp(static_cast<keyCode>(wParam));
             return 0;
         }
         
@@ -225,5 +241,5 @@ void Illulu::Window::_RegisterWindowClass() noexcept
     };
 
     ATOM res = RegisterClassEx(&wc);
-    ILL_ASSERT(ILL_TEXT("RegisterClassEx failed"), res);
+    ILL_ASSERT(ILL_TEXT("RegisterClassEx failed"), static_cast<u16>(res));
 }

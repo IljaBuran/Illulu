@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <string>
 
 using i8  = int8_t;
 using i16 = int16_t;
@@ -18,7 +19,11 @@ using f64 = double;
 #define ILL_TEXT(str) L##str
 
 #if UNICODE
+	using string = std::wstring;
 	using tchar = wchar_t;
 #else
+	using string = std::string
 	using tchar = char;
 #endif
+
+using keyCode = u8;

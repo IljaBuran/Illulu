@@ -5,18 +5,21 @@
 
 #include <tuple>
 
+
 namespace Illulu
 {
+    class Input;
+
     class Window
     {
     public:
 
-        Window() = default;
+        Window(Input& input);
         ~Window();
 
-        void Initialize() noexcept;
+        void OnInitialize() noexcept;
         void Show() const noexcept;
-        void PullMessages() noexcept;
+        void OnUpdate() noexcept;
         bool ShouldClose() const noexcept;
         // todo: change the return type
         std::pair<i32, i32> GetClientSize() const noexcept;
@@ -35,6 +38,8 @@ namespace Illulu
         bool m_minimized   = false;
         bool m_focused     = false;
         bool m_shouldClose = false;
+
+        Input& m_input;
 
         static constexpr const tchar* WINDOW_CLASS_NAME = ILL_TEXT("IlluluWndClass");
     };

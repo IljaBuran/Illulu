@@ -1,9 +1,12 @@
 #pragma once
 
-#include "Common/Types.h"
+#include "Types.h"
 
 #include <type_traits>
 #include <stdexcept>
+#include <iterator>
+#include <bitset>
+#include <format>
 
 namespace Illulu
 {
@@ -23,6 +26,55 @@ namespace Illulu
 		}
 		
 	}
+
+	template<typename T>
+	concept Container = requires(T container)
+	{
+		std::begin(container);
+		std::end(container);
+	};
+
+	template<Container T>
+	inline string PrintContainer(const T& container) noexcept
+	{
+		string str = ILL_TEXT("[");
+		bool first = true;
+
+		for (const auto& value : container)
+		{
+			if (!first)
+				str += ILL_TEXT(", ");
+
+			str += std::format(ILL_TEXT("{}"), value);
+			first = false;
+		}
+
+		str += ILL_TEXT("]\n");
+		return str;
+	}
+
+	template<u64 size>
+	inline string BitsetToKeys(const std::bitset<size>& bs) noexcept
+	{
+		string str = ILL_TEXT("[");
+		bool first = true;
+
+		for (u64 i = 0; i < size; i++)
+		{
+			if (bs.test(i) != true)
+				continue;
+			
+			if (!first)
+				str += ILL_TEXT(", ");
+
+			str += std::format(ILL_TEXT("{}"), static_cast<char>(i));
+			first = false;
+		}
+
+		str += ILL_TEXT("]\n");
+		return str;
+	}
+
 #endif
 }
 // if changing to multiliner -> make do-while loop macro

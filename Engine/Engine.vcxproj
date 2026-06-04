@@ -102,6 +102,8 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Source\Core\Renderer.cpp" />
+    <ClCompile Include="Source\Core\Engine.cpp" />
     <ClCompile Include="Source\Core\Input.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
@@ -117,6 +119,8 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Core\Renderer.h" />
+    <ClInclude Include="Source\Core\Engine.h" />
     <ClInclude Include="Source\Common\Debug.h" />
     <ClInclude Include="Source\Core\Input.h" />
     <ClInclude Include="Source\Common\Common.h" />
