@@ -14,6 +14,8 @@ namespace Illulu
     {
     public:
 
+        Window() = delete;
+
         Window(Input& input);
         ~Window();
 
@@ -42,6 +44,6 @@ namespace Illulu
 
         Input& m_input;
 
-        static constexpr const tchar* WINDOW_CLASS_NAME = ILL_TEXT("IlluluWndClass");
+        static constexpr const wchar* WINDOW_CLASS_NAME = L"IlluluWndClass";
     };
 }

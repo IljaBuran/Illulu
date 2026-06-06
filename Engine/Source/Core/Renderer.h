@@ -1,13 +1,15 @@
 #pragma once
 
 #include "Common.h"
-
 #include <wrl/client.h>
+
 #include <D3dx12.h>
+
 #include <d3d12sdklayers.h>
 #include <dxgi1_6.h>
 
 #include <vector>
+#include <array>
 
 
 namespace Illulu
@@ -25,24 +27,47 @@ namespace Illulu
     using ID3D12CommandQueueIll        = ID3D12CommandQueue1;
     using ID3D12GraphicsCommandListIll = ID3D12GraphicsCommandList10;
 
-    class DescriptorHeap;
+    class DescriptorHeap
+    {
+    public:
+
+        DescriptorHeap() = default;
+
+        void Init(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE desc_heap_type, u32 capacity);
+
+        ID3D12DescriptorHeap* GetHeap() const noexcept;
+
+        CD3DX12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(u32 index) const noexcept;
+        CD3DX12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(u32 index) const noexcept;
+
+    private:
+        ComPtr<ID3D12DescriptorHeap> m_heap;
+        u32 m_descriptorSize = 0;
+    };
 
     class Renderer
     {
-    public:
+    public: /* Public functions */
     
-        void OnInitialize(HWND hWnd, i32 width, i32 height) noexcept;
+        void OnInitialize(HWND hWnd, i32 width, i32 height);
         void OnUpdate() noexcept;
 
-    private:
+    private: /* Private functions */
 
-        std::vector<DXGI_MODE_DESC1> _GetDisplayModes(const ComPtr<IDXGIOutputIll>& output) const noexcept;
-        void _CreateCommandObjects() noexcept;
-        void _CreateSwapChain(HWND hWnd, i32 width, i32 height) noexcept;
+        std::vector<DXGI_MODE_DESC1> _GetDisplayModes(const ComPtr<IDXGIOutputIll>& output) const;
+        void _CreateCommandObjects() ;
+        void _CreateSwapChain(HWND hWnd, i32 width, i32 height);
         void _CreateRTVAndDSVDescriptorHeaps() noexcept;
         CD3DX12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferView() noexcept;
         CD3DX12_CPU_DESCRIPTOR_HANDLE GetDepthStencilView() noexcept;
-    private:
+
+    private: /* Constants */
+
+        static constexpr D3D_FEATURE_LEVEL FEATURE_LEVEL          = D3D_FEATURE_LEVEL_12_2;
+        static constexpr u32               SWAPCHAIN_BUFFER_COUNT = 2;
+        static constexpr DXGI_FORMAT       DEPTH_STENCIL_FORMAT   = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+    private: /* Private variables */
 
         ComPtr<IDXGIFactoryIll>              m_DXGIFactory;
         ComPtr<IDXGISwapChainIll>            m_DXGISwapChain;
@@ -57,31 +82,13 @@ namespace Illulu
         DescriptorHeap                       m_DSVHeap;
 
         u8                                   m_currBackBuffer{};
+        
+        ComPtr<ID3D12Resource>                                     m_depthStencilBuffer;
+        std::array<ComPtr<ID3D12Resource>, SWAPCHAIN_BUFFER_COUNT> m_swapChainBuffer;
 
-        static constexpr D3D_FEATURE_LEVEL FEATURE_LEVEL = D3D_FEATURE_LEVEL_12_2;
-        static constexpr u32 SWAPCHAIN_BUFFER_COUNT      = 2;
-
-    public:
+    public: /* Debug */
     
-        void debug_LogAdaptersAndOutputs() noexcept;
-        void debug_EnableDebugLayer() noexcept;
-    };
-
-    class DescriptorHeap
-    {
-    public:
-
-        DescriptorHeap() = default;
-        
-        void Init(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE desc_heap_type, u32 capacity) noexcept;
-        
-        ID3D12DescriptorHeap* GetHeap() const noexcept;
-
-        CD3DX12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(u32 index) noexcept;
-        CD3DX12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(u32 index) noexcept;
-
-    private:
-        ComPtr<ID3D12DescriptorHeap> m_heap;
-        u32 m_descriptorSize = 0;
+        void debug_LogAdaptersAndOutputs();
+        void debug_EnableDebugLayer();
     };
 }

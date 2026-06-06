@@ -1,31 +1,42 @@
 #pragma once
 
 #include "Types.h"
+#include "WindowsMin.h"
 
 #include <type_traits>
 #include <stdexcept>
+#include <exception>
 #include <iterator>
 #include <bitset>
 #include <format>
+#include <comdef.h>
 
 namespace Illulu
 {
-#if defined(_DEBUG)
-	template<typename First, typename... Ts>
-	inline void ASSERT(const tchar* message, First&& first, Ts&&... args) 
+	class ILLException
 	{
-		static_assert((std::convertible_to<std::remove_cvref_t<First>, bool>), 
-			"All evaluated arguments of ASSERT need to be convertible to bool");
-		static_assert((std::convertible_to<std::remove_cvref_t<Ts>, bool> && ...), 
-			"All evaluated arguments of ASSERT need to be convertible to bool");
+	public:
 
-		if (!(static_cast<bool>(first) && ... && static_cast<bool>(args)))
+		ILLException() = delete;
+		explicit ILLException(HRESULT hRes, const String& functionName, const String& fileName, i32 lineNumber)
+			: m_hRes(hRes), m_functionName(functionName), m_fileName(fileName), m_lineNumber(lineNumber) {}
+
+		String GetMessage() const
 		{
-			(void)message;
-			throw std::runtime_error("Error!");
+			_com_error err(m_hRes);
+			String errMsg = err.ErrorMessage();
+			
+			return std::format(L"File: {}\nLine: {}\nFunction: {}, HRESULT error code: {}, HRESULT error msg: {}",
+				m_fileName, m_lineNumber, m_functionName, static_cast<i32>(m_hRes), errMsg);
 		}
+
+	private:
 		
-	}
+		HRESULT m_hRes;
+		String  m_functionName;
+		String  m_fileName;
+		i32     m_lineNumber;
+	};
 
 	template<typename T>
 	concept Container = requires(T container)
@@ -35,28 +46,28 @@ namespace Illulu
 	};
 
 	template<Container T>
-	inline string PrintContainer(const T& container) noexcept
+	inline String PrintContainer(const T& container) noexcept
 	{
-		string str = ILL_TEXT("[");
+		String str = L"[";
 		bool first = true;
 
 		for (const auto& value : container)
 		{
 			if (!first)
-				str += ILL_TEXT(", ");
+				str += L", ";
 
-			str += std::format(ILL_TEXT("{}"), value);
+			str += std::format(L"{}", value);
 			first = false;
 		}
 
-		str += ILL_TEXT("]\n");
+		str += L"]\n";
 		return str;
 	}
 
 	template<u64 size>
-	inline string BitsetToKeys(const std::bitset<size>& bs) noexcept
+	inline String BitsetToKeys(const std::bitset<size>& bs) noexcept
 	{
-		string str = ILL_TEXT("[");
+		String str = L"[";
 		bool first = true;
 
 		for (u64 i = 0; i < size; i++)
@@ -65,21 +76,41 @@ namespace Illulu
 				continue;
 			
 			if (!first)
-				str += ILL_TEXT(", ");
+				str += L", ";
 
-			str += std::format(ILL_TEXT("{}"), static_cast<char>(i));
+			str += std::format(L"{}", static_cast<char>(i));
 			first = false;
 		}
 
-		str += ILL_TEXT("]\n");
+		str += L"]\n";
 		return str;
 	}
 
+#if defined(_DEBUG)
+	#define WIN_CHECK(x)                                                          \
+	{												                              \
+		HRESULT __hRes = x;							                              \
+		if (FAILED(__hRes))							                              \
+		{										                                  \
+			String __fileNameW(__FILEW__);		                                  \
+			throw ILLException(__hRes, String(L#x), String(__FILEW__), __LINE__); \
+		}                                                                         \
+	}
+
+	#define ILL_ASSERT(expr)                                      \
+		do                                                        \
+		{                                                         \
+			if (!(expr))                                          \
+			{                                                     \
+				__debugbreak();                                   \
+			}                                                     \
+		} while (false)
+
+	#define ILL_VERIFY(expr) ILL_ASSERT(expr)
+#else
+	#define WIN_CHECK(x) x
+	#define ILL_ASSERT(expr) ((void)0)
+	#define ILL_VERIFY(expr) ((void)(expr))
 #endif
 }
-// if changing to multiliner -> make do-while loop macro
-#if defined(_DEBUG)
-	#define ILL_ASSERT(msg, ...) Illulu::ASSERT(msg, __VA_ARGS__)
-#else
-	#define ILL_ASSERT(msg, ...) (void)(__VA_ARGS__)
-#endif
+

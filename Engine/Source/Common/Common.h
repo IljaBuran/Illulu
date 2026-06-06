@@ -2,3 +2,5 @@
 
 #include "Types.h"
 #include "Debug.h"
+
+#include <cassert>

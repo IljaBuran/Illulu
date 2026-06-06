@@ -10,14 +10,22 @@ extern "C"
     __declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\";
 }
 
-i32 WinMain(
+int WinMain(
     [[maybe_unused]] HINSTANCE hInstance,
     [[maybe_unused]] HINSTANCE hPrevInstance,
     [[maybe_unused]] LPSTR lpCmdLine,
-    [[maybe_unused]] i32 nCmdShow)
+    [[maybe_unused]] INT nCmdShow)
 {
     Illulu::Engine engine;
-    engine.Run();
+    
+    try
+    {
+        engine.Run();
+    }
+    catch (Illulu::ILLException e)
+    {
+        MessageBox(nullptr, (e.GetMessageW()).c_str(), L"Assertion failed", MB_OK);
+    }
     
     return 0;
 }

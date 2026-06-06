@@ -13,11 +13,11 @@ namespace Illulu
     public:
 
         Engine() noexcept;
-        void Run() noexcept;
+        void Run();
 
     private:
         
-        void Initialize() noexcept;
+        void Initialize();
         void Update() noexcept;
 
     private:
