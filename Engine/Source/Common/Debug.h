@@ -113,4 +113,3 @@ namespace Illulu
 	#define ILL_VERIFY(expr) ((void)(expr))
 #endif
 }
-

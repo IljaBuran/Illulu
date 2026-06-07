@@ -9,8 +9,7 @@ namespace Illulu
     {
         u32 factoryFlags = 0;
 
-    //#if defined(_DEBUG)
-    #if 1
+    #if defined(_DEBUG)
         factoryFlags = DXGI_CREATE_FACTORY_DEBUG;
         debug_EnableDebugLayer();
     #endif
@@ -35,8 +34,13 @@ namespace Illulu
         }
         assert(found);
 
+        m_infoQueue.CreateAndSetCallback(m_device.Get());
+
         // create fence throught newly created device
         WIN_CHECK(m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
+
+        m_fenceEvent = CreateEvent(nullptr, false, false, nullptr);
+        ILL_ASSERT(m_fenceEvent);
 
         // create command queue, allocator, list
         _CreateCommandObjects();
@@ -50,6 +54,12 @@ namespace Illulu
 
         // create RTV and DSV descriptor heaps
         _CreateRTVAndDSVDescriptorHeaps();
+        
+        // create descriptor heap for CBVs, SRVs, UAVs
+        m_cbvSrvUavHeap.Initialize(m_device.Get(), CBV_SRV_UAV_HEAP_CAPACITY);
+
+        // init imgui
+        _ImGuiInit(hWnd);
 
         // create render target view
         for (u32 i = 0; i < SWAPCHAIN_BUFFER_COUNT; i++)
@@ -70,9 +80,9 @@ namespace Illulu
             .Format = DEPTH_STENCIL_FORMAT,
             .SampleDesc
             {
-                    .Count = 1,
-                    .Quality = 0
-        },
+                .Count = 1,
+                .Quality = 0
+            },
             .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
             .Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
         };
@@ -97,7 +107,7 @@ namespace Illulu
             &optClear,
             IID_PPV_ARGS(&m_depthStencilBuffer)));
 
-        m_device->CreateDepthStencilView(m_depthStencilBuffer.Get(), nullptr, GetDepthStencilView());
+        m_device->CreateDepthStencilView(m_depthStencilBuffer.Get(), nullptr, _GetDepthStencilView());
 
         const CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
                 m_depthStencilBuffer.Get(),
@@ -121,25 +131,92 @@ namespace Illulu
         };
 
         m_commandList->RSSetViewports(1, &viewportDesc);
+
+        WIN_CHECK(m_commandList->Close());
+        ID3D12CommandList* commandLists[] = {m_commandList.Get()};
+        m_commandQueue->ExecuteCommandLists(1, commandLists);
+        _FlushCommandQueue();
+
+        m_currBackBuffer = static_cast<u8>(m_DXGISwapChain->GetCurrentBackBufferIndex());
     }
 
-    void Renderer::OnUpdate() noexcept
+    void Renderer::OnUpdate()
+    {
+        _ImGuiBeginFrame();
+        
+        WIN_CHECK(m_directCommandListAllocator->Reset());
+        WIN_CHECK(m_commandList->Reset(m_directCommandListAllocator.Get(), nullptr));
+
+        const CD3DX12_RESOURCE_BARRIER presentToRenderTarget =
+            CD3DX12_RESOURCE_BARRIER::Transition(
+                _GetCurrentBackbuffer(),
+                D3D12_RESOURCE_STATE_PRESENT,
+                D3D12_RESOURCE_STATE_RENDER_TARGET
+            );
+        m_commandList->ResourceBarrier(1, &presentToRenderTarget);
+
+        auto rtv = _GetCurrentBackbufferView();
+
+        m_commandList->OMSetRenderTargets(1, &rtv, false, nullptr);
+
+        const f32 clearColor[] = {0.08f, 0.10f, 0.15f, 1.0f};
+
+        m_commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+
+
+        _ImGuiEndFrame();
+
+        const CD3DX12_RESOURCE_BARRIER renderTargetToPresent =
+            CD3DX12_RESOURCE_BARRIER::Transition(
+                _GetCurrentBackbuffer(),
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_PRESENT
+            );
+        m_commandList->ResourceBarrier(1, &renderTargetToPresent);
+
+
+        WIN_CHECK(m_commandList->Close());
+
+        ID3D12CommandList* commandLists[] = {m_commandList.Get()};
+        m_commandQueue->ExecuteCommandLists(1, commandLists);
+
+        WIN_CHECK(m_DXGISwapChain->Present(1, 0));
+
+        m_currBackBuffer = static_cast<u8>(m_DXGISwapChain->GetCurrentBackBufferIndex());
+
+        _FlushCommandQueue();
+
+    }
+
+    void Renderer::OnShutdown()
+    {
+        _FlushCommandQueue();
+
+        _ImGuiDestroy();
+        
+        m_infoQueue.Destroy();
+    }
+
+    void Renderer::ResizeBackbuffer()
     {
     }
 
-    std::vector<DXGI_MODE_DESC1> Renderer::_GetDisplayModes(const ComPtr<IDXGIOutput6>& output6) const
+    void Renderer::_FlushCommandQueue()
     {
-        u32 count{};
-        DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        m_currentFence++;
 
-        // get count of modelists
-        WIN_CHECK(output6->GetDisplayModeList1(format, 0, &count, nullptr));
+        WIN_CHECK(m_commandQueue->Signal(m_fence.Get(), m_currentFence));
 
-        // get the modelists
-        std::vector<DXGI_MODE_DESC1> modeLists(count);
-        WIN_CHECK(output6->GetDisplayModeList1(format, 0, &count, &modeLists[0]));
+        if (m_fence->GetCompletedValue() < m_currentFence)
+        {
+            WIN_CHECK(m_fence->SetEventOnCompletion(m_currentFence, m_fenceEvent));
+            WaitForSingleObject(m_fenceEvent, INFINITE);
+        }
+    }
 
-        return modeLists;
+    ID3D12Resource* Renderer::_GetCurrentBackbuffer() noexcept
+    {
+        return m_swapChainBuffer[m_currBackBuffer].Get();
     }
 
     void Renderer::_CreateCommandObjects()
@@ -182,7 +259,7 @@ namespace Illulu
             .Scaling = DXGI_SCALING_NONE,
             .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
             .AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED,
-            .Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
+            .Flags = 0
         };
 
         ComPtr<IDXGISwapChain1> swapChainV1;
@@ -194,78 +271,110 @@ namespace Illulu
 
     void Renderer::_CreateRTVAndDSVDescriptorHeaps() noexcept
     {
-        m_RTVHeap.Init(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, SWAPCHAIN_BUFFER_COUNT);
-        m_DSVHeap.Init(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1);
+        ILL_ASSERT(!m_RTVHeap.IsInitialized() && !m_DSVHeap.IsInitialized());
+        
+        m_RTVHeap.Initialize(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, SWAPCHAIN_BUFFER_COUNT);
+        m_DSVHeap.Initialize(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1);
+
+        ILL_ASSERT(m_RTVHeap.IsInitialized() && m_DSVHeap.IsInitialized());
     }
 
-    CD3DX12_CPU_DESCRIPTOR_HANDLE Renderer::GetCurrentBackBufferView() noexcept
+    CD3DX12_CPU_DESCRIPTOR_HANDLE Renderer::_GetCurrentBackbufferView() noexcept
     {
         return m_RTVHeap.GetCpuHandle(m_currBackBuffer);
     }
 
-    CD3DX12_CPU_DESCRIPTOR_HANDLE Renderer::GetDepthStencilView() noexcept
+    CD3DX12_CPU_DESCRIPTOR_HANDLE Renderer::_GetDepthStencilView() noexcept
     {
         return m_DSVHeap.GetCpuHandle(0);
     }
 
-    void Renderer::debug_LogAdaptersAndOutputs()
+    void Renderer::_ImGuiInit(HWND hWnd)
     {
-        HRESULT hRes;
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
-        u32 i = 0;
+        ImGui_ImplWin32_Init(hWnd);
 
-        ComPtr<IDXGIAdapter1> adapterV1;
+        ImGui_ImplDX12_InitInfo initInfo = {};
+        initInfo.Device = m_device.Get();
+        initInfo.CommandQueue = m_commandQueue.Get();
+        initInfo.NumFramesInFlight = SWAPCHAIN_BUFFER_COUNT;
+        initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-        while ((hRes = m_DXGIFactory->EnumAdapters1(i, adapterV1.ReleaseAndGetAddressOf())) != DXGI_ERROR_NOT_FOUND)
-        {
-            ComPtr<IDXGIAdapterIll> adapter;
-
-            WIN_CHECK(adapterV1.As<IDXGIAdapterIll>(&adapter));
-
-            DXGI_ADAPTER_DESC3 adapterDesc;
-            adapter->GetDesc3(&adapterDesc);
-
-            // here it won't compile if UNICODE not used, adapterDesc.Description is hardcoded wchar
-            String adapterString = std::format(L"Adapter: {}\n", adapterDesc.Description);
-            OutputDebugString(adapterString.c_str());
-
-            u32 j = 0;
-            ComPtr<IDXGIOutput> outputV0;
-            while ((hRes = adapter->EnumOutputs(j, outputV0.ReleaseAndGetAddressOf())) == S_OK)
+        initInfo.SrvDescriptorHeap = m_cbvSrvUavHeap.GetHeap();
+        initInfo.SrvDescriptorAllocFn =
+            [](ImGui_ImplDX12_InitInfo* info,
+               D3D12_CPU_DESCRIPTOR_HANDLE* outCpuHandle,
+               D3D12_GPU_DESCRIPTOR_HANDLE* outGpuHandle)
             {
-                ComPtr<IDXGIOutputIll> output;
-                WIN_CHECK(outputV0.As<IDXGIOutputIll>(&output));
+                auto* renderer = static_cast<Renderer*>(info->UserData);
 
-                DXGI_OUTPUT_DESC1 outputDesc;
-                WIN_CHECK(output->GetDesc1(&outputDesc));
+                renderer->m_imguiFontSrvIndex =
+                    renderer->m_cbvSrvUavHeap.GetNextFreeIndex();
 
-                // here it won't compile if UNICODE not used, outputDesc.DeviceName is hardcoded wchar
-                String outputString = std::format(L"\tMonitor: {} \n", outputDesc.DeviceName);
-                OutputDebugString(outputString.c_str());
+                *outCpuHandle =
+                    renderer->m_cbvSrvUavHeap.GetCpuHandle(renderer->m_imguiFontSrvIndex);
 
-                std::vector<DXGI_MODE_DESC1> modeLists = _GetDisplayModes(output);
+                *outGpuHandle =
+                    renderer->m_cbvSrvUavHeap.GetGpuHandle(renderer->m_imguiFontSrvIndex);
+            };
 
-                for (const auto& x : modeLists)
+        initInfo.SrvDescriptorFreeFn =
+            [](ImGui_ImplDX12_InitInfo* info,
+               D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+               D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle)
+            {
+                (void)cpuHandle;
+                (void)gpuHandle;
+
+                auto* renderer = static_cast<Renderer*>(info->UserData);
+
+                if (renderer->m_imguiFontSrvIndex != UINT32_MAX)
                 {
-                    f32 nom = static_cast<f32>(x.RefreshRate.Numerator);
-                    f32 denom = static_cast<f32>(x.RefreshRate.Denominator);
-                    f32 refreshRate = nom / denom;
-
-                    u32 width = x.Width;
-                    u32 height = x.Height;
-
-                    OutputDebugString(std::format(L"\t\t{}x{}@{}Hz\n", width, height, refreshRate).c_str());
+                    renderer->m_cbvSrvUavHeap.ReleaseIndex(renderer->m_imguiFontSrvIndex);
+                    renderer->m_imguiFontSrvIndex = UINT32_MAX;
                 }
-                j++;
-            }
-            assert(hRes == DXGI_ERROR_NOT_FOUND);
+            };
 
-            i++;
-        }
+        initInfo.UserData = this;
 
-        assert(hRes == DXGI_ERROR_NOT_FOUND);
-
+        WIN_CHECK(ImGui_ImplDX12_Init(&initInfo));
     }
+
+    void Renderer::_ImGuiBeginFrame()
+    {
+        ImGui_ImplDX12_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();
+        ImGui::ShowDemoWindow();
+    }
+
+    void Renderer::_ImGuiEndFrame()
+    {
+        ImGui::Render();
+
+        ID3D12DescriptorHeap* heaps[] =
+        {
+            m_cbvSrvUavHeap.GetHeap()
+        };
+
+        m_commandList->SetDescriptorHeaps(1, heaps);
+
+        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_commandList.Get());
+    }
+
+    void Renderer::_ImGuiDestroy()
+    {
+        ImGui_ImplDX12_Shutdown();
+        ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext();
+    }
+
+
 
     void Renderer::debug_EnableDebugLayer()
     {
@@ -275,45 +384,4 @@ namespace Illulu
         debugController->EnableDebugLayer();
         debugController->SetEnableGPUBasedValidation(true);
     }
-
-    void DescriptorHeap::Init(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE descHeapType, u32 capacity)
-    {
-        assert(!m_heap);
-        assert(device);
-
-        D3D12_DESCRIPTOR_HEAP_DESC descHeapDesc
-        {
-            .Type = descHeapType,
-            .NumDescriptors = capacity,
-            .Flags = (descHeapType == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || descHeapType == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER) ?
-            D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-            .NodeMask = 0
-        };
-
-        WIN_CHECK(device->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(m_heap.GetAddressOf())));
-
-        m_descriptorSize = device->GetDescriptorHandleIncrementSize(descHeapType);
-    }
-
-    ID3D12DescriptorHeap* DescriptorHeap::GetHeap() const noexcept
-    {
-        return m_heap.Get();
-    }
-
-    CD3DX12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::GetCpuHandle(u32 index) const noexcept
-    {
-        CD3DX12_CPU_DESCRIPTOR_HANDLE hCPU(m_heap->GetCPUDescriptorHandleForHeapStart());
-
-        hCPU.Offset(index, m_descriptorSize);
-        return hCPU;
-    }
-
-    CD3DX12_GPU_DESCRIPTOR_HANDLE DescriptorHeap::GetGpuHandle(u32 index) const noexcept
-    {
-        CD3DX12_GPU_DESCRIPTOR_HANDLE hGPU(m_heap->GetGPUDescriptorHandleForHeapStart());
-
-        hGPU.Offset(index, m_descriptorSize);
-        return hGPU;
-    }
-
 }

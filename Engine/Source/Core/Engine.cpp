@@ -34,7 +34,6 @@ namespace Illulu
         m_input.OnUpdate();
         m_window.OnUpdate();
 
-        Sleep(1000 / 60);
+        m_renderer.OnUpdate();
     }
 }
-

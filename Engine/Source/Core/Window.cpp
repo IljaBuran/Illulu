@@ -5,8 +5,13 @@
 #include "Common.h"
 #include "WindowsMin.h"
 
+#include "backends/imgui_impl_win32.h"
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
 namespace Illulu
 {
+
     Window::Window(Input& input)
         : m_input(input)
     {
@@ -171,6 +176,9 @@ namespace Illulu
         // note(ilja): normally unsafe, but we are going to have only 1 window, therefor it should NOT break
         static Window* thisWindow = nullptr;
 
+        if (ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam))
+            return true;
+        
         if (uMsg == WM_NCCREATE) [[unlikely]]
         {
             ILL_ASSERT(!thisWindow);
