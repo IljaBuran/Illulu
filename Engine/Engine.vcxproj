@@ -124,6 +124,7 @@
     <ClCompile Include="Source\Core\Timer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Common\Delegate.h" />
     <ClInclude Include="Source\Common\DX12.h" />
     <ClInclude Include="Source\RHI\InfoQueue.h" />
     <ClInclude Include="Source\RHI\DescriptorUtil.h" />
