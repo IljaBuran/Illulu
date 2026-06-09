@@ -147,9 +147,7 @@ namespace Illulu
                         [[fallthrough]];
                     case SIZE_RESTORED:
                     {
-                        m_width = newWidth;
-                        m_height = newHeight;
-
+                        _HandleClientResize(newWidth, newHeight);
                         m_minimized = false;
                         return 0;
                     }
@@ -176,9 +174,10 @@ namespace Illulu
         // note(ilja): normally unsafe, but we are going to have only 1 window, therefor it should NOT break
         static Window* thisWindow = nullptr;
 
+        // note(ilja): this needs to be here for imgui
         if (ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam))
             return true;
-        
+
         if (uMsg == WM_NCCREATE) [[unlikely]]
         {
             ILL_ASSERT(!thisWindow);
@@ -195,7 +194,7 @@ namespace Illulu
             SetLastError(0);
             ILL_VERIFY(SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(thisWindow)) || !GetLastError());
 
-            // assign 
+            // assign
             thisWindow->m_hWnd = hWnd;
 
             // let DefWindowProc handle the rest of the message

@@ -8,7 +8,7 @@ namespace Illulu
     {
     public:
 
-        constexpr DelegateHandle() noexcept;
+        constexpr DelegateHandle() noexcept = default;
 
         [[nodiscard]] static DelegateHandle Create() noexcept
         {
@@ -19,12 +19,22 @@ namespace Illulu
         
         [[nodiscard]] bool IsValid() const noexcept
         {
-            m_id != INVALID_ID;
+            return m_id != INVALID_ID;
         }
 
         void Reset() noexcept
         {
             m_id = INVALID_ID;
+        }
+
+        friend bool operator==(DelegateHandle lhs, DelegateHandle rhs) noexcept
+        {
+            return lhs.m_id == rhs.m_id;
+        }
+
+        friend bool operator!=(DelegateHandle lhs, DelegateHandle rhs) noexcept
+        {
+            return !(lhs == rhs);
         }
 
     private:
@@ -46,12 +56,12 @@ namespace Illulu
 
         constexpr RawDelegate() noexcept = default;
 
-        [[nodiscard]] IsBound() const noexcept
+        [[nodiscard]] bool IsBound() const noexcept
         {
             return m_stub != nullptr;
         }
 
-        [[nodiscard]] IsBoundTo(const void* object) const noexcept
+        [[nodiscard]] bool IsBoundTo(const void* object) const noexcept
         {
             ILL_ASSERT(object);
             return object != nullptr && m_object == object;
@@ -63,7 +73,7 @@ namespace Illulu
             m_stub = nullptr;
         }
 
-        void Execute() const
+        void Execute(Args... args) const
         {
             ILL_ASSERT(IsBound());
             m_stub(m_object, std::forward<Args>(args)...);
@@ -79,8 +89,8 @@ namespace Illulu
             delegate.m_stub = [](void* object, Args... args)
             {
                 T* typedObject = static_cast<T*>(object);
-                (typedObject->Method)(std::forward<Args>(args)...);
-            }
+                (typedObject->*Method)(std::forward<Args>(args)...);
+            };
 
             return delegate;
         }
@@ -95,13 +105,13 @@ namespace Illulu
             delegate.m_stub = [](void* object, Args... args)
             {
                 const T* typedObject = static_cast<const T*>(object);
-                (typedObject->Method)(std::forward<Args>(args)...);
-            }
+                (typedObject->*Method)(std::forward<Args>(args)...);
+            };
 
             return delegate;
         }
 
-        template<typename T, void (*Function)(Args...) const>
+        template<typename T, void (*Function)(Args...)>
         static RawDelegate CreateStatic() noexcept
         {
             RawDelegate delegate;
@@ -109,7 +119,7 @@ namespace Illulu
             delegate.m_stub = [](void*, Args... args)
             {
                 (Function)(std::forward<Args>(args)...);
-            }
+            };
 
             return delegate;
         }
