@@ -3,7 +3,7 @@
 #include "Common.h"
 
 #include <vector>
-#include <array>
+#include "Array.h"
 
 #include "DX12.h"
 
@@ -20,66 +20,63 @@ namespace Illulu
     {
     public: /* Public functions */
     
-        void OnInitialize(HWND hWnd, i32 width, i32 height);
+        void OnInitialize(HWND hWnd);
         void OnUpdate();
+        void OnRender();
         void OnShutdown();
 
-        void ResizeBackbuffer();
+        void UpdateRenderTargetSize(i32 newWidth, i32 newHeight);
 
     private: /* Private functions */
 
-        void _FlushCommandQueue();
+        f32 _GetRenderTargetAspectRatio() const;
+        
+        void _FeedCommandList();
+        void _WaitForGpu();
+        void _MoveToNextFrame();
         ID3D12Resource* _GetCurrentBackbuffer() noexcept;
-
-        void _CreateCommandObjects() ;
-        void _CreateSwapChain(HWND hWnd, i32 width, i32 height);
-        void _CreateRTVAndDSVDescriptorHeaps() noexcept;
-
-        CD3DX12_CPU_DESCRIPTOR_HANDLE _GetCurrentBackbufferView() noexcept;
-        CD3DX12_CPU_DESCRIPTOR_HANDLE _GetDepthStencilView() noexcept;
-
-        // imgui
-        void _ImGuiInit(HWND hWnd);
-        void _ImGuiBeginFrame();
-        void _ImGuiEndFrame();
-        void _ImGuiDestroy();
-
-
-    private: /* Constants */
-
-        static constexpr D3D_FEATURE_LEVEL FEATURE_LEVEL             = D3D_FEATURE_LEVEL_12_2;
-        static constexpr u32               SWAPCHAIN_BUFFER_COUNT    = 2;
-        static constexpr DXGI_FORMAT       DEPTH_STENCIL_FORMAT      = DXGI_FORMAT_D24_UNORM_S8_UINT;
-        static constexpr u32               CBV_SRV_UAV_HEAP_CAPACITY = 16384;
 
     private: /* Private variables */
 
-        ComPtr<IDXGIFactoryIll>              m_DXGIFactory;
-        ComPtr<IDXGISwapChainIll>            m_DXGISwapChain;
+        /* pipeline objects */
+        ComPtr<IDXGIFactoryIll>                        m_factory{};
 
-        ComPtr<ID3D12DeviceIll>              m_device;
-        ComPtr<ID3D12FenceIll>               m_fence;
-        ComPtr<ID3D12CommandQueueIll>        m_commandQueue;
-        ComPtr<ID3D12CommandAllocator>       m_directCommandListAllocator;
-        ComPtr<ID3D12GraphicsCommandListIll> m_commandList;
+        ComPtr<IDXGIAdapterIll>                        m_adapter{};
+        ComPtr<ID3D12DeviceIll>                        m_device{};
 
-        DescriptorHeap                       m_RTVHeap;
-        DescriptorHeap                       m_DSVHeap;
-        CbvSrvUavHeap                        m_cbvSrvUavHeap;
+        ComPtr<IDXGISwapChainIll>                      m_swapchain{};
+        D3D12_VIEWPORT                                 m_viewport{};
+        D3D12_RECT                                     m_scissorRect{};
 
-        InfoQueue                            m_infoQueue;
+        Array<ComPtr<ID3D12Resource>, FRAMEBUFFER_COUNT>         m_renderTargets{};
+        Array<ComPtr<ID3D12CommandAllocator>, FRAMEBUFFER_COUNT> m_commandListAllocators{};
 
-        u8                                   m_currBackBuffer{};
-        HANDLE                               m_fenceEvent;
-        u64                                  m_currentFence{};
+        ComPtr<ID3D12CommandQueueIll>                  m_commandQueue{};
+        ComPtr<ID3D12GraphicsCommandListIll>           m_commandList{};
+                                 
+        ComPtr<ID3D12RootSignature>                    m_rootSignature{};
+        ComPtr<ID3D12PipelineState>                    m_pipelineState{};
 
-        u32                                  m_imguiFontSrvIndex = UINT32_MAX;
-        
-        ComPtr<ID3D12Resource>                                     m_depthStencilBuffer;
-        std::array<ComPtr<ID3D12Resource>, SWAPCHAIN_BUFFER_COUNT> m_swapChainBuffer;
+        u32                                            m_rtvDescriptorSize{};
 
-    public: /* Debug */
-    
-        void debug_EnableDebugLayer();
+        InfoQueue                                      m_infoQueue{};
+
+        ComPtr<ID3D12DescriptorHeap> m_rtvHeap{};
+
+        /* synchronization */
+        u8                          m_frameIndex{};
+        ComPtr<ID3D12FenceIll>      m_fence{};
+        Event                       m_fenceEvent{};
+        Array<u64, FRAMEBUFFER_COUNT> m_fenceValues{};
+
+        /* app resources */
+        ComPtr<ID3D12Resource>   m_vertexBuffer{};  
+        D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView{};
+
+        /* render target info */ 
+        i32                      m_renderTargetWidth{};
+        i32                      m_renderTargetHeight{};
+
+        bool m_initialized{false};
     };
 }

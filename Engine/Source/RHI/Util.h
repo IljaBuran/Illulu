@@ -9,4 +9,5 @@ namespace Illulu
 {
     std::vector<DXGI_MODE_DESC1> GetDisplayModes(IDXGIOutput6* output6);
     void LogAdaptersAndOutputs(IDXGIFactoryIll* factory);
+    void EnableDebugLayer();
 }

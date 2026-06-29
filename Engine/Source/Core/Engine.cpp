@@ -9,31 +9,45 @@ namespace Illulu
 
     void Engine::Run()
     {
-        Initialize();
+        _Initialize();
 
         while (!m_window.ShouldClose())
         {
-            Update();
+            _Update();
         }
     }
 
-    void Engine::Initialize()
+    void Engine::_Initialize()
     {
+        _ConfigureDelegates();
+        
         m_window.OnInitialize();
         HWND hWnd = m_window.GetNativeWindowHandle();
-        assert(hWnd);
-        auto [width, height] = m_window.GetClientSize();
-        m_renderer.OnInitialize(hWnd, width, height);
 
+        m_renderer.OnInitialize(hWnd);
 
         m_window.Show();
     }
 
-    void Engine::Update() noexcept
+    void Engine::_Update()
     {
+        m_timer.Tick();
+        
         m_input.OnUpdate();
         m_window.OnUpdate();
 
         m_renderer.OnUpdate();
+
+        m_renderer.OnRender();
+    }
+    
+    void Engine::_Shutdown()
+    {
+        m_renderer.OnShutdown();
+    }
+
+    void Engine::_ConfigureDelegates()
+    {
+        m_window.AddResizeListener<Renderer, &Renderer::UpdateRenderTargetSize>(&m_renderer);
     }
 }

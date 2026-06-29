@@ -19,7 +19,11 @@ namespace Illulu
 
     Window::~Window()
     {
-        CloseWindow(m_hWnd);
+        if (m_hWnd)
+        {
+            DestroyWindow(m_hWnd);
+            m_hWnd = nullptr;
+        }
         UnregisterClass(WINDOW_CLASS_NAME, GetModuleHandle(nullptr));
     }
 
@@ -32,8 +36,10 @@ namespace Illulu
         i32 monitorWidth = GetSystemMetrics(SM_CXSCREEN);
         i32 monitorHeight = GetSystemMetrics(SM_CYSCREEN);
 
-        m_width = (i32)(0.75f * monitorWidth);
-        m_height = (i32)(0.75f * monitorHeight);
+        m_width = static_cast<i32>(0.75f * monitorWidth);
+        m_height = static_cast<i32>(0.75f * monitorHeight);
+
+        m_resizeDelegate.Call(m_width, m_height);
 
         RECT clientRect = {0, 0, m_width, m_height};
         AdjustWindowRectEx(&clientRect, winStyle, false, 0);
@@ -90,6 +96,19 @@ namespace Illulu
 
     LRESULT Window::_HandleMessages(u32 uMsg, WPARAM wParam, LPARAM lParam) noexcept
     {
+        static i32 newWidth{};
+        static i32 newHeight{};
+
+        auto lResize = [&]()
+        {
+            if (m_width == newWidth && m_height == newHeight)
+                return 0;
+
+            m_width = newWidth;
+            m_height = newHeight;
+            m_resizeDelegate.Call(m_width, m_height);
+        };
+
         switch (uMsg)
         {
             case WM_KEYDOWN:
@@ -124,16 +143,18 @@ namespace Illulu
                 m_focused = true;
                 return 0;
             }
+
             [[unlikely]] case WM_KILLFOCUS:
             {
                 m_focused = false;
                 return 0;
             }
+            
 
             [[unlikely]] case WM_SIZE:
             {
-                i32 newWidth = LOWORD(lParam);
-                i32 newHeight = HIWORD(lParam);
+                newWidth = LOWORD(lParam);
+                newHeight = HIWORD(lParam);
 
                 switch (wParam)
                 {
@@ -142,16 +163,32 @@ namespace Illulu
                         m_minimized = true;
                         return 0;
                     }
-                    // SIZE_MAXIMIZED and SIZE_RESTORED are handled the same (at least for now)
                     case SIZE_MAXIMIZED:
-                        [[fallthrough]];
+                    {
+                        m_minimized = false;
+                        m_maximized = true;
+
+                        lResize();
+
+                        return 0;
+                    }
                     case SIZE_RESTORED:
                     {
-                        _HandleClientResize(newWidth, newHeight);
                         m_minimized = false;
+                        if (m_maximized)
+                        {
+                            m_maximized = false;
+                            lResize();
+                        }
                         return 0;
                     }
                 }
+                return 0;
+            }
+
+            [[unlikely]] case WM_EXITSIZEMOVE:
+            {
+                lResize();
                 return 0;
             }
 

@@ -6,8 +6,12 @@ namespace Illulu
 {
     class Timer
     {
-        f32 GetTotalTime() const noexcept;
-        f32 GetDelta() const noexcept;
+    public:
+
+        Timer() noexcept;
+        
+        [[nodiscard]] f32 GetTotalTime() const noexcept;
+        [[nodiscard]] f32 GetDelta() const noexcept;
 
         void Reset() noexcept;
         void Start() noexcept;
@@ -16,8 +20,8 @@ namespace Illulu
 
     private:
 
-        f64 m_secondsPerCount =  0.0f;
-        f64 m_deltaTime       = -1.0f;
+        f64 m_secondsPerCount = 0.0;
+        f64 m_deltaTime       = 0.0;
 
         i64 m_baseTime   = 0;
         i64 m_pausedTime = 0;

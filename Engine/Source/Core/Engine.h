@@ -5,6 +5,7 @@
 #include "Core/Input.h"
 #include "Core/Window.h"
 #include "Core/Renderer.h"
+#include "Core/Timer.h"
 
 namespace Illulu
 {
@@ -15,17 +16,19 @@ namespace Illulu
         Engine() noexcept;
         void Run();
 
-    private:
+    private: /* private functions */
         
-        void Initialize();
-        void Update() noexcept;
+        void _Initialize();
+        void _Update();
+        void _Shutdown();
 
-    private:
+        void _ConfigureDelegates();
+
+    private: /* private variables */
 
         Input    m_input;
         Window   m_window;
         Renderer m_renderer;
+        Timer    m_timer;
     };
 }
-
-

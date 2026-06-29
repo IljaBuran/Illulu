@@ -1,0 +1,8 @@
+Abstract whole DX12
+
+pick the most performant adapter
+Modern Approach (DXGI 1.6 / Windows 10+):
+If you are working with Windows 10 (or newer), the most streamlined way is to enumerate devices and ask for maximum performance directly:
+    [x] Create an IDXGIFactory6 instance using CreateDXGIFactory1 or CreateDXGIFactory2.
+    [ ] Call EnumAdapterByGpuPreference with DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE.
+    [ ] The adapter at index 0 will be your best-performing graphics card.

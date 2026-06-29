@@ -4,73 +4,96 @@
 
 namespace Illulu
 {
+    Timer::Timer() noexcept
+    {
+        i64 countsPerSecond = 0;
+        QueryPerformanceFrequency(
+            reinterpret_cast<LARGE_INTEGER*>(&countsPerSecond)
+        );
+
+        m_secondsPerCount = 1.0 / static_cast<f64>(countsPerSecond);
+
+        Reset();
+    }
+
     f32 Timer::GetTotalTime() const noexcept
     {
-        return m_stopped ? static_cast<f32>(((m_stopTime - m_pausedTime) - m_baseTime) * m_secondsPerCount)
-                         : static_cast<f32>(((m_currTime - m_pausedTime) - m_baseTime) * m_secondsPerCount);
+        const i64 endTime = m_stopped ? m_stopTime : m_currTime;
+
+        return static_cast<f32>(
+            ((endTime - m_pausedTime) - m_baseTime) *
+            m_secondsPerCount
+        );
     }
 
     f32 Timer::GetDelta() const noexcept
     {
-        return f32();
+        return static_cast<f32>(m_deltaTime);
     }
 
     void Timer::Reset() noexcept
     {
-        i64 currTime;
-        QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&currTime));
+        i64 currTime = 0;
+        QueryPerformanceCounter(
+            reinterpret_cast<LARGE_INTEGER*>(&currTime)
+        );
 
         m_baseTime = currTime;
         m_prevTime = currTime;
+        m_currTime = currTime;
         m_stopTime = 0;
+        m_pausedTime = 0;
+        m_deltaTime = 0.0;
         m_stopped = false;
     }
 
     void Timer::Start() noexcept
     {
-        i64 startTime;
-        QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&startTime));
+        if (!m_stopped)
+            return;
 
-        if (m_stopped)
-        {
-            m_pausedTime += (startTime - m_stopTime);
+        i64 startTime = 0;
+        QueryPerformanceCounter(
+            reinterpret_cast<LARGE_INTEGER*>(&startTime)
+        );
 
-            m_prevTime = startTime;
-        
-            m_stopTime = 0;
-            m_stopped = false;
-        }
+        m_pausedTime += startTime - m_stopTime;
+        m_prevTime = startTime;
+        m_stopTime = 0;
+        m_stopped = false;
     }
 
     void Timer::Stop() noexcept
     {
-        if (!m_stopped)
-        {
-            i64 currTime;
-            QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&currTime));
+        if (m_stopped)
+            return;
 
-            m_stopTime = true;
-            m_stopped = true;
-        }
+        QueryPerformanceCounter(
+            reinterpret_cast<LARGE_INTEGER*>(&m_stopTime)
+        );
+
+        m_stopped = true;
     }
 
     void Timer::Tick() noexcept
     {
-        if (m_stopped) [[unlikely]]
+        if (m_stopped)
         {
             m_deltaTime = 0.0;
             return;
         }
 
-        i64 currTime;
-        QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&currTime));
-        m_currTime = currTime;
+        QueryPerformanceCounter(
+            reinterpret_cast<LARGE_INTEGER*>(&m_currTime)
+        );
 
-        m_deltaTime = (m_currTime - m_prevTime) * m_secondsPerCount;
+        m_deltaTime =
+            static_cast<f64>(m_currTime - m_prevTime) *
+            m_secondsPerCount;
+
         m_prevTime = m_currTime;
 
-        // according to msdn there are scenarios it can be negative...
-        m_deltaTime = (m_deltaTime >= 0.0f) ? m_deltaTime : 0.0f;
+        if (m_deltaTime < 0.0)
+            m_deltaTime = 0.0;
     }
 }
-

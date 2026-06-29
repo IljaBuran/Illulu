@@ -75,5 +75,13 @@ namespace Illulu
         assert(hRes == DXGI_ERROR_NOT_FOUND);
 
     }
+    void EnableDebugLayer()
+    {
+        ComPtr<ID3D12DebugIll> debugController;
+        WIN_CHECK(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)));
+
+        debugController->EnableDebugLayer();
+        debugController->SetEnableGPUBasedValidation(true);
+    }
 }
 

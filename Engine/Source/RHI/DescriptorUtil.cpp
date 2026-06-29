@@ -29,7 +29,6 @@ namespace Illulu
     CD3DX12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::GetCpuHandle(u32 index) const noexcept
     {
         CD3DX12_CPU_DESCRIPTOR_HANDLE hCPU(m_heap->GetCPUDescriptorHandleForHeapStart());
-
         hCPU.Offset(index, m_descriptorSize);
         return hCPU;
     }
@@ -78,5 +77,4 @@ namespace Illulu
         m_usedIndices.erase(it);
         m_freeIndices.push(index);
     }
-
 }

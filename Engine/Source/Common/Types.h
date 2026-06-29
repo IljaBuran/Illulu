@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <string>
 
-
 namespace Illulu
 {
     using i8  = int8_t;
