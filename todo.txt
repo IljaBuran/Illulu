@@ -1,8 +1,20 @@
-Abstract whole DX12
+VERY IMPORTANT:
+    MAKE PASSING OF RENDER TARGET SIZE FROM WINDOW TO RENDERER MUCH MORE SIMPLER
 
-pick the most performant adapter
-Modern Approach (DXGI 1.6 / Windows 10+):
-If you are working with Windows 10 (or newer), the most streamlined way is to enumerate devices and ask for maximum performance directly:
-    [x] Create an IDXGIFactory6 instance using CreateDXGIFactory1 or CreateDXGIFactory2.
-    [ ] Call EnumAdapterByGpuPreference with DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE.
-    [ ] The adapter at index 0 will be your best-performing graphics card.
+
+[ ] Abstract whole DX12
+
+    [] Command Lists
+        - there is only one needed GraphicsCommandList, used for all kinds of CLs : direct, compute, copy
+
+    [] Command Allocators
+
+    [] Swap Chain
+
+        [] SwapChain::Resize() implementation
+
+    ---
+    * for these i need some more research, it's a bit more complicated with these mthrfckrs *
+    [] Root Signature
+
+    [] Pipeline State

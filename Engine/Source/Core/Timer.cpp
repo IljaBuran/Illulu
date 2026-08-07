@@ -1,12 +1,12 @@
-#include "Timer.h"
+#include "Timer.hpp"
 
-#include "WindowsMin.h"
+#include "WindowsMin.hpp"
 
 namespace Illulu
 {
     Timer::Timer() noexcept
     {
-        i64 countsPerSecond = 0;
+        i64 countsPerSecond{};
         QueryPerformanceFrequency(
             reinterpret_cast<LARGE_INTEGER*>(&countsPerSecond)
         );
@@ -18,11 +18,10 @@ namespace Illulu
 
     f32 Timer::GetTotalTime() const noexcept
     {
-        const i64 endTime = m_stopped ? m_stopTime : m_currTime;
+        const i64 endTime{m_stopped ? m_stopTime : m_currTime};
 
         return static_cast<f32>(
-            ((endTime - m_pausedTime) - m_baseTime) *
-            m_secondsPerCount
+            ((endTime - m_pausedTime) - m_baseTime) * m_secondsPerCount
         );
     }
 
@@ -33,7 +32,7 @@ namespace Illulu
 
     void Timer::Reset() noexcept
     {
-        i64 currTime = 0;
+        i64 currTime{};
         QueryPerformanceCounter(
             reinterpret_cast<LARGE_INTEGER*>(&currTime)
         );
@@ -52,7 +51,7 @@ namespace Illulu
         if (!m_stopped)
             return;
 
-        i64 startTime = 0;
+        i64 startTime{};
         QueryPerformanceCounter(
             reinterpret_cast<LARGE_INTEGER*>(&startTime)
         );

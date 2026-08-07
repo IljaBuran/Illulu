@@ -1,5 +1,7 @@
-#include "Core/Input.h"
-#include "WindowsMin.h"
+#include "Core/Input.hpp"
+#include "WindowsMin.hpp"
+
+#include "String.hpp"
 
 namespace Illulu
 {
@@ -24,6 +26,45 @@ namespace Illulu
         m_keysDown.set(key);
     }
 
+    void Input::NotifyMouseUp(MouseButton button) noexcept
+    {
+        ILL_ASSERT(button < MouseButton::COUNT);
+
+        u64 _button{static_cast<u64>(button)};
+        if (m_mouseDown.test(_button))
+            m_mouseReleased.set(_button);
+
+        m_mouseDown.set(_button, false);
+    }
+
+    void Input::NotifyMouseDown(MouseButton button) noexcept
+    {
+        ILL_ASSERT(button < MouseButton::COUNT);
+
+        u64 _button{static_cast<u64>(button)};
+        if (!m_mouseDown.test(_button))
+            m_mousePressed.set(_button);
+
+        m_mouseDown.set(_button);
+    }
+
+    void Input::NotifyNewMousePostition(i32 x, i32 y) noexcept
+    {
+        // note: if invalidated (coming back from unfocused, etc...) we set delta to 0.0f
+        xMouseDelta = mousePosInvalid ? 0 : x - xMousePosition;
+        yMouseDelta = mousePosInvalid ? 0 : y - yMousePosition;
+
+        mousePosInvalid = false;
+
+        xMousePosition = x;
+        yMousePosition = y;
+    }
+
+    void Input::NotifyInvalidateMousePosition() noexcept
+    {
+        mousePosInvalid = true;
+    }
+
     bool Input::IsKeyPressed(keyCode key) const noexcept
     {
         return m_keysPressed.test(key);
@@ -39,6 +80,24 @@ namespace Illulu
         return m_keysDown.test(key);
     }
 
+    bool Input::IsMouseBtnPressed(MouseButton button) const noexcept
+    {
+        u64 _key{static_cast<u64>(button)};
+        return m_mousePressed.test(_key);
+    }
+
+    bool Input::IsMouseBtnReleased(MouseButton button) const noexcept
+    {
+        u64 _key{static_cast<u64>(button)};
+        return m_mouseReleased.test(_key);
+    }
+
+    bool Input::IsMouseBtnDown(MouseButton button) const noexcept
+    {
+        u64 _key{static_cast<u64>(button)};
+        return m_mouseDown.test(_key);
+    }
+
     void Input::_ResetPressedReleased() noexcept
     {
         m_keysPressed.reset();
@@ -47,8 +106,8 @@ namespace Illulu
 
     void Input::debug_PrintState() const noexcept
     {
-        OutputDebugString(String(L"KeysPressed:" + BitsetToKeys(m_keysPressed)).c_str());
-        OutputDebugString(String(L"KeysReleased:" + BitsetToKeys(m_keysReleased)).c_str());
-        OutputDebugString(String(L"KeysDown:" + BitsetToKeys(m_keysDown)).c_str());
+        INFO(L"KeysPressed:", BitsetToKeys(m_keysPressed));
+        INFO(L"KeysReleased: {}", BitsetToKeys(m_keysReleased));
+        INFO(L"KeysDown: {}", BitsetToKeys(m_keysDown));
     }
 }

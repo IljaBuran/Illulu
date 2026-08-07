@@ -1,17 +1,25 @@
-#include "Renderer.h"
+#include "Renderer.hpp"
 
-#include "Common.h"
-#include "WindowsMin.h"
+#include "Common.hpp"
+#include "WindowsMin.hpp"
 
-#include "RHI/Util.h"
+#include <cmath>
+#include "Vector.hpp"
+#include "String.hpp"
 
-#include "Vector.h"
-#include "Core/Filesystem.h"
+#include "Core/Filesystem.hpp"
+
+#include "D3D12/Util.hpp"
+
+#include "Data.hpp"
+
 
 namespace Illulu
 {
     void Renderer::OnInitialize(HWND hWnd)
     {
+        INFO(L"*** [DX12] Initialization start ***");
+
         // this should be already initialized correctly
         ILL_ASSERT(m_renderTargetHeight && m_renderTargetWidth);
 
@@ -19,162 +27,89 @@ namespace Illulu
         {
             m_viewport =
             {
-                .TopLeftX = 0.0f,
-                .TopLeftY = 0.0f,
-                .Width = static_cast<f32>(m_renderTargetWidth),
-                .Height = static_cast<f32>(m_renderTargetHeight),
-                .MinDepth = 0.0f,
-                .MaxDepth = 1.0f
+                .TopLeftX{0.0f},
+                .TopLeftY{0.0f},
+                .Width{static_cast<f32>(m_renderTargetWidth)},
+                .Height{static_cast<f32>(m_renderTargetHeight)},
+                .MinDepth{0.0f},
+                .MaxDepth{1.0f}
             };
 
             m_scissorRect =
             {
-                .left = 0,
-                .top = 0,
-                .right = m_renderTargetWidth,
-                .bottom = m_renderTargetHeight,
+                .left{0},
+                .top{0},
+                .right{static_cast<i32>(m_renderTargetWidth)},
+                .bottom{static_cast<i32>(m_renderTargetHeight)},
             };
         }
 
-        u32 factoryFlags = 0;
+        D3D12::Factory factory{};
+        m_device.Initialize(factory);
 
-    #if defined(_DEBUG)
-        factoryFlags = DXGI_CREATE_FACTORY_DEBUG;
-        EnableDebugLayer();
-    #endif
+        m_commandQueue.Create(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-        // create DXGIFactory
-        WIN_CHECK(CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&m_factory)));
-        // create device through adapters
-        ComPtr<IDXGIAdapter1> adapterV1;
+        /* Create CBV's descriptor heap */
+        m_cbvHeap.Initialize(m_device, 2);
 
-        // method to find device which supports feature_level
-        bool found = false;
-        for (i32 i = 0; WIN_OK(m_factory->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&adapterV1))); i++)
+        /* Create DSV's descriptor heap */
+        m_dsvHeap.Create(m_device, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, FRAMEBUFFER_COUNT);
+
+        /* Initialize swap chain */
+        m_swapChain.Create(factory, m_device, m_commandQueue, hWnd, m_renderTargetWidth, m_renderTargetHeight);
+
+        /* Create command list allocators */
+        for (u32 i = 0; i < FRAMEBUFFER_COUNT; i++)
         {
-            HRESULT hRes = D3D12CreateDevice(adapterV1.Get(), FEATURE_LEVEL, IID_PPV_ARGS(&m_device));
+            m_commandListAllocators[i].Create(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+        }
 
-            if (SUCCEEDED(hRes))
+        /* Create a root signature consisting of a descriptor table with single CBV */
+        {
+            D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData
             {
-                found = true;
-                break;
+                .HighestVersion{D3D_ROOT_SIGNATURE_VERSION_1_1}
+            };
+
+            Array<CD3DX12_DESCRIPTOR_RANGE1, 1> ranges{};
+            Array<CD3DX12_ROOT_PARAMETER1, 1> rootParameters{};
+
+            {
+                constexpr u32 descriptorCount{2};
+                constexpr u32 shaderRegister{0};
+                constexpr u32 registerSpace{0};
+
+                ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, descriptorCount, shaderRegister, registerSpace, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
             }
-        }
-        ILL_ASSERT(found);
+            rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
 
-        m_infoQueue.CreateAndSetCallback(m_device.Get());
+            D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+                D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 
-        /* Create command queue */
-        {
-            D3D12_COMMAND_QUEUE_DESC queueDesc
-            {
-                .Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
-                .Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
-                .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE,
-                .NodeMask = 0
-            };
-
-            WIN_CHECK(m_device->CreateCommandQueue(
-                &queueDesc,
-                IID_PPV_ARGS(&m_commandQueue)
-            ));
-        }
-
-        /* Create swapchain  */
-        {
-            DXGI_SWAP_CHAIN_DESC1 swapChainDesc
-            {
-                .Width = static_cast<u32>(m_renderTargetWidth),
-                .Height = static_cast<u32>(m_renderTargetHeight),
-                .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
-                .Stereo = false,
-                .SampleDesc
-                {
-                    .Count = 1,
-                    .Quality = 0
-                },
-                .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
-                .BufferCount = FRAMEBUFFER_COUNT,
-                .Scaling = DXGI_SCALING_NONE,
-                .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
-                .AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED,
-                .Flags = 0
-            };
-
-            ComPtr<IDXGISwapChain1> swapChainV1;
-
-            WIN_CHECK(m_factory->CreateSwapChainForHwnd(
-                m_commandQueue.Get(),
-                hWnd,
-                &swapChainDesc,
-                nullptr,
-                nullptr,
-                swapChainV1.GetAddressOf()
-            ));
-
-            WIN_CHECK(swapChainV1.As<IDXGISwapChainIll>(&m_swapchain));
-        }
-
-        m_frameIndex = static_cast<u8>(m_swapchain->GetCurrentBackBufferIndex());
-
-        /* Disable fullscreen */
-        if (DISABLE_FULLSCREEN)
-        {
-            WIN_CHECK(m_factory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER));
-        }
-
-        /* Create RTV's descriptor heap */
-        {
-            D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc
-            {
-                .Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-                .NumDescriptors = FRAMEBUFFER_COUNT,
-                .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-                .NodeMask = 0
-            };
-            WIN_CHECK(m_device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)));
-
-            m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-        }
-
-        /* Create frame resources (RTVs and command allocators) */
-        {
-            CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
-
-            // for each frame create rtv and command allocator
-            for (u32 i = 0; i < FRAMEBUFFER_COUNT; i++)
-            {
-                WIN_CHECK(m_swapchain->GetBuffer(i, IID_PPV_ARGS(&m_renderTargets[i])));
-                m_device->CreateRenderTargetView(m_renderTargets[i].Get(), nullptr, rtvHandle);
-
-                rtvHandle.Offset(1, m_rtvDescriptorSize);
-
-                WIN_CHECK(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandListAllocators[i])))
-            }
-        }
-
-        /* Create empty root signature */
-        {
-            CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
-            rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+            CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc{};
+            rootSignatureDesc.Init_1_1(static_cast<u32>(rootParameters.size()), rootParameters.data(), 0, nullptr, rootSignatureFlags);
 
             ComPtr<ID3DBlob> signature{};
             ComPtr<ID3DBlob> error{};
 
-            WIN_CHECK(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, signature.GetAddressOf(), error.GetAddressOf()));
-            
+            WIN_CHECK(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
+
             WIN_CHECK(m_device->CreateRootSignature(
-                0, 
-                signature->GetBufferPointer(), 
-                signature->GetBufferSize(), 
+                0,
+                signature->GetBufferPointer(),
+                signature->GetBufferSize(),
                 IID_PPV_ARGS(&m_rootSignature)
             ));
         }
 
         /* Create pipeline state (includes compiling and loading shaders) */
         {
-            Vector<byte> vertexShaderData = Filesystem::ReadBinaryBlobFromFile(String(L"Basic_VSMain.cso"));
-            Vector<byte> pixelShaderData = Filesystem::ReadBinaryBlobFromFile(String(L"Basic_PSMain.cso"));
+            Vector<byte> vertexShaderData = Filesystem::ReadBinaryBlobFromFile(L"Basic_VSMain.cso");
+            Vector<byte> pixelShaderData = Filesystem::ReadBinaryBlobFromFile(L"Basic_PSMain.cso");
 
             ILL_ASSERT(!vertexShaderData.empty() && !pixelShaderData.empty());
 
@@ -201,7 +136,7 @@ namespace Illulu
                     .FrontFace{},
                     .BackFace{}
                 },
-                .InputLayout{Vertex1::GetInputLayoutDesc()},
+                .InputLayout{ColorVertex::GetInputLayoutDesc()},
                 .IBStripCutValue{},
                 .PrimitiveTopologyType{D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE},
                 .NumRenderTargets{1},
@@ -222,77 +157,219 @@ namespace Illulu
 
         /* Create command list */
         {
-            WIN_CHECK(m_device->CreateCommandList(
-                0,
+            m_commandList.Create(
+                m_device,
                 D3D12_COMMAND_LIST_TYPE_DIRECT,
-                m_commandListAllocators[m_frameIndex].Get(),
-                m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
+                m_commandListAllocators[m_swapChain.m_backbufferIndex],
+                m_pipelineState.Get()
+            );
 
             // command list is created in recording state -> close it
             WIN_CHECK(m_commandList->Close());
         }
 
-        /* Create vertex buffer */
-        {
-            std::array<Vertex1, 3> triangleVertices
-            {
-                {
-                    { { 0.0f, 0.25f * _GetRenderTargetAspectRatio(), 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f } },
-                    { { 0.25f, -0.25f * _GetRenderTargetAspectRatio(), 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f } },
-                    { { -0.25f, -0.25f * _GetRenderTargetAspectRatio(), 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f } }
-                }
-            };
-
-            constexpr u64 vertexBufferSize = sizeof(triangleVertices);
-
-            // create the vertex buffer and initialize it with triangle's values
-            {
-                CD3DX12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-                CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-
-                WIN_CHECK(m_device->CreateCommittedResource(
-                    &heapProps,
-                    D3D12_HEAP_FLAG_NONE,
-                    &resourceDesc,
-                    D3D12_RESOURCE_STATE_GENERIC_READ,
-                    nullptr,
-                    IID_PPV_ARGS(&m_vertexBuffer)));
-
-                u8* pVertexDataBegin{nullptr};
-                CD3DX12_RANGE readRange(0, 0);
-                WIN_CHECK(m_vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
-                memcpy(pVertexDataBegin, triangleVertices.data(), vertexBufferSize);
-                m_vertexBuffer->Unmap(0, nullptr);
-
-                m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-                m_vertexBufferView.StrideInBytes = sizeof(Vertex1);
-                m_vertexBufferView.SizeInBytes = vertexBufferSize;
-            }
-        }
-
         /* Create synchronization objects */
         {
             WIN_CHECK(m_device->CreateFence(
-                m_fenceValues[m_frameIndex], 
-                D3D12_FENCE_FLAG_NONE, 
+                m_fenceValues[m_swapChain.m_backbufferIndex],
+                D3D12_FENCE_FLAG_NONE,
                 IID_PPV_ARGS(&m_fence)
             ));
 
-            m_fenceValues[m_frameIndex]++;
-            
+            m_fenceValues[m_swapChain.m_backbufferIndex]++;
 
             // create event handle
             m_fenceEvent.Attach(CreateEvent(nullptr, false, false, nullptr));
             ILL_ASSERT(m_fenceEvent.IsValid());
+        }
+
+
+        u32 totalSizeNeeded{sizeof(boxVertices) + sizeof(boxIndices)};
+        // Create default heap resource, we'll copy the vertices and indices here from upload buffer
+        {
+            auto heapProps{CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)};
+            auto resDesc{CD3DX12_RESOURCE_DESC::Buffer(totalSizeNeeded)};
+
+            WIN_CHECK(m_device->CreateCommittedResource(
+                &heapProps,
+                D3D12_HEAP_FLAG_NONE,
+                &resDesc,
+                D3D12_RESOURCE_STATE_COMMON,
+                nullptr,
+                IID_PPV_ARGS(&m_vertexIndexBufferGPU)
+            ));
+        }
+
+        // Create upload heap resource and copy data into it
+        {
+            // we'll use the same config, but different heap type
+            auto heapProps{CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)};
+            auto resDesc{CD3DX12_RESOURCE_DESC::Buffer(totalSizeNeeded)};
+
+            WIN_CHECK(m_device->CreateCommittedResource(
+                &heapProps,
+                D3D12_HEAP_FLAG_NONE,
+                &resDesc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&m_uploadBuffer)
+            ));
+
+            auto mapRange{CD3DX12_RANGE(0, 0)};
+            m_uploadBuffer->Map(0, &mapRange, reinterpret_cast<void**>(&m_mappedUploadBuffer));
+
+            // copy vertices and indices into upload buffer
+            std::memcpy(m_mappedUploadBuffer, boxVertices.data(), sizeof(boxVertices));
+            std::memcpy(m_mappedUploadBuffer + sizeof(boxVertices), boxIndices.data(), sizeof(boxIndices));
+
+            m_uploadBuffer->Unmap(0, nullptr);
+        }
+
+        // VERY IMPORTANT HERE:
+        WIN_CHECK(m_commandList->Reset(m_commandListAllocators[m_swapChain.m_backbufferIndex], nullptr));
+
+
+        // transition default buffer to COPY_DEST, copy and then transition back
+        {
+            D3D12_RESOURCE_BARRIER toCopyDest
+            {
+                CD3DX12_RESOURCE_BARRIER::Transition(
+                    m_vertexIndexBufferGPU.Get(),
+                    D3D12_RESOURCE_STATE_COMMON,
+                    D3D12_RESOURCE_STATE_COPY_DEST)
+            };
+
+            m_commandList->ResourceBarrier(1, &toCopyDest);
+
+            m_commandList->CopyBufferRegion(
+                m_vertexIndexBufferGPU.Get(), 0,
+                m_uploadBuffer.Get(), 0,
+                totalSizeNeeded
+            );
+
+            D3D12_RESOURCE_BARRIER toGenericRead
+            {
+                CD3DX12_RESOURCE_BARRIER::Transition(
+                    m_vertexIndexBufferGPU.Get(),
+                    D3D12_RESOURCE_STATE_COPY_DEST,
+                    D3D12_RESOURCE_STATE_GENERIC_READ)
+            };
+
+            m_commandList->ResourceBarrier(1, &toGenericRead);
+        }
+
+        // execute the copy from upload to default
+        {
+            WIN_CHECK(m_commandList->Close());
+
+            Array<ID3D12CommandList*, 1> lists{m_commandList.GetCommandListPtr()};
+            m_commandQueue->ExecuteCommandLists(static_cast<u32>(lists.size()), lists.data());
 
             _WaitForGpu();
         }
 
+        // create vertex buffer view
+        {
+            m_vertexBufferView =
+            {
+                .BufferLocation{m_vertexIndexBufferGPU->GetGPUVirtualAddress()},
+                .SizeInBytes{sizeof(boxVertices)},
+                .StrideInBytes{sizeof(ColorVertex)}
+            };
+        }
+
+        // create index buffer view
+        {
+            m_indexBufferView =
+            {
+                .BufferLocation{m_vertexIndexBufferGPU->GetGPUVirtualAddress() + sizeof(boxVertices)},
+                .SizeInBytes{sizeof(boxIndices)},
+                .Format{DXGI_FORMAT_R16_UINT}
+            };
+        }
+
+        /* create constant buffers */
+        {
+            // PER OBJECT
+
+            constexpr u32 objCbSize = static_cast<u32>(AlignUp<D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT>(sizeof(cbPerObject)));
+
+            auto heapProps{CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)};
+            auto resDesc{CD3DX12_RESOURCE_DESC::Buffer(objCbSize)};
+
+            WIN_CHECK(m_device->CreateCommittedResource(
+                &heapProps,
+                D3D12_HEAP_FLAG_NONE,
+                &resDesc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&m_perObjectUploadBuffer)
+            ));
+
+            D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc
+            {
+                .BufferLocation{m_perObjectUploadBuffer->GetGPUVirtualAddress()},
+                .SizeInBytes{objCbSize}
+            };
+
+            m_device->CreateConstantBufferView(&cbvDesc, m_cbvHeap.GetCpuHandle(0));
+
+            auto mapRange{CD3DX12_RANGE(0, 0)};
+            m_perObjectUploadBuffer->Map(0, &mapRange, reinterpret_cast<void**>(&m_pPerObjectMapped));
+
+            // PER PASS
+            constexpr u32 passCbSize = static_cast<u32>(AlignUp<D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT>(sizeof(cbPerPass)));
+            resDesc.Width = passCbSize;
+
+            WIN_CHECK(m_device->CreateCommittedResource(
+                &heapProps,
+                D3D12_HEAP_FLAG_NONE,
+                &resDesc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&m_perPassUploadBuffer)
+            ));
+
+            cbvDesc =
+            {
+                .BufferLocation{m_perPassUploadBuffer->GetGPUVirtualAddress()},
+                .SizeInBytes{passCbSize}
+            };
+
+            m_device->CreateConstantBufferView(&cbvDesc, m_cbvHeap.GetCpuHandle(1));
+            m_perPassUploadBuffer->Map(0, &mapRange, reinterpret_cast<void**>(&m_pPerPassMapped));
+        }
+
+
         m_initialized = true;
+        INFO(L"*** [DX12] Initialization successful ***");
     }
 
     void Renderer::OnUpdate()
     {
+        using namespace DirectX;
+
+        // --- per object: world matrix ---
+        static float angle = 0.0f;
+        angle += 0.01f;
+
+        XMMATRIX world = XMMatrixRotationY(angle);
+        cbPerObject objData{};
+        XMStoreFloat4x4(&objData.M, XMMatrixTranspose(world)); // HLSL expects column-major by default, transpose row-major XMMatrix
+        memcpy(m_pPerObjectMapped, &objData, sizeof(objData));
+
+        // --- per pass: view-projection matrix ---
+        XMVECTOR eye = XMVectorSet(0.0f, 0.0f, -5.0f, 1.0f);
+        XMVECTOR target = XMVectorZero();
+        XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        XMMATRIX view = XMMatrixLookAtLH(eye, target, up);
+
+        float aspect = static_cast<float>(m_renderTargetWidth) / static_cast<float>(m_renderTargetHeight);
+        XMMATRIX proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, aspect, 0.1f, 100.0f);
+
+        cbPerPass passData{};
+        XMStoreFloat4x4(&passData.VP, XMMatrixTranspose(view * proj));
+        memcpy(m_pPerPassMapped, &passData, sizeof(passData));
     }
 
     void Renderer::OnRender()
@@ -300,21 +377,17 @@ namespace Illulu
         _FeedCommandList();
 
         // Execute the command list.
-        ID3D12CommandList* ppCommandLists[] = {m_commandList.Get()};
-        m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
-
-
+        const Array<ID3D12CommandList*, 1> commandLists = {m_commandList};
+        m_commandQueue->ExecuteCommandLists(static_cast<u32>(commandLists.size()), commandLists.data());
         // Present the frame.
-        WIN_CHECK(m_swapchain->Present(1, 0));
+        WIN_CHECK(m_swapChain->Present(1, 0));
 
-        _MoveToNextFrame();
+        _EndFrame();
     }
 
     void Renderer::OnShutdown()
     {
         _WaitForGpu();
-
-        m_infoQueue.Destroy();
 
         if (m_fenceEvent.IsValid())
         {
@@ -326,7 +399,7 @@ namespace Illulu
     {
         m_renderTargetWidth = newWidth;
         m_renderTargetHeight = newHeight;
-        
+
         if (!m_initialized)
             return;
 
@@ -334,64 +407,49 @@ namespace Illulu
 
         m_viewport =
         {
-            .TopLeftX = 0.0f,
-            .TopLeftY = 0.0f,
-            .Width = static_cast<f32>(m_renderTargetWidth),
-            .Height = static_cast<f32>(m_renderTargetHeight),
-            .MinDepth = 0.0f,
-            .MaxDepth = 1.0f
+            .TopLeftX{0.0f},
+            .TopLeftY{0.0f},
+            .Width{static_cast<f32>(m_renderTargetWidth)},
+            .Height{static_cast<f32>(m_renderTargetHeight)},
+            .MinDepth{0.0f},
+            .MaxDepth{1.0f}
         };
 
         m_scissorRect =
         {
-            .left = 0,
-            .top = 0,
-            .right = m_renderTargetWidth,
-            .bottom = m_renderTargetHeight
+            .left{0},
+            .top{0},
+            .right{static_cast<i32>(m_renderTargetWidth)},
+            .bottom{static_cast<i32>(m_renderTargetHeight)}
         };
 
-        const u64 fenceValue = m_fenceValues[m_frameIndex];
+        const u64 fenceValue{m_fenceValues[m_swapChain.m_backbufferIndex]};
 
-        /* Release current RTVs */
-        for (u32 i = 0; i < FRAMEBUFFER_COUNT; i++)
-        { 
-            m_renderTargets[i].Reset();
+        for (u32 i{0}; i < FRAMEBUFFER_COUNT; i++)
+        {
             m_fenceValues[i] = fenceValue;
         }
 
-        DXGI_SWAP_CHAIN_DESC1 swapchainDesc{};
-        WIN_CHECK(m_swapchain->GetDesc1(&swapchainDesc));
+        m_swapChain.Resize(m_device, newWidth, newHeight);
 
-        WIN_CHECK(m_swapchain->ResizeBuffers(
-            FRAMEBUFFER_COUNT,
-            m_renderTargetWidth,
-            m_renderTargetHeight,
-            swapchainDesc.Format,
-            swapchainDesc.Flags
-        ));
-
-        m_frameIndex = static_cast<u8>(m_swapchain->GetCurrentBackBufferIndex());
-
-        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
-        for (u32 i = 0; i < FRAMEBUFFER_COUNT; i++)
-        {
-            WIN_CHECK(m_swapchain->GetBuffer(i, IID_PPV_ARGS(&m_renderTargets[i])));
-            m_device->CreateRenderTargetView(m_renderTargets[i].Get(), nullptr, rtvHandle);
-
-            rtvHandle.Offset(1, m_rtvDescriptorSize);
-        }
+        INFO(L"[DX12] Render target resized");
     }
 
     void Renderer::_FeedCommandList()
     {
         // reset command list allocator -> this can only happen when command list associated with the allocator has finished
-        WIN_CHECK(m_commandListAllocators[m_frameIndex]->Reset());
+        WIN_CHECK(m_commandListAllocators[m_swapChain.m_backbufferIndex]->Reset());
 
         // command list can be reset immediately after calling ExecuteCommandLists on it
-        WIN_CHECK(m_commandList->Reset(m_commandListAllocators[m_frameIndex].Get(), m_pipelineState.Get()));
+        WIN_CHECK(m_commandList->Reset(m_commandListAllocators[m_swapChain.m_backbufferIndex], m_pipelineState.Get()));
 
         // setting states
         m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+
+        Array<ID3D12DescriptorHeap*, 1> ppHeaps{m_cbvHeap.GetHeap()};
+        m_commandList->SetDescriptorHeaps(static_cast<u32>(ppHeaps.size()), ppHeaps.data());
+
+        m_commandList->SetGraphicsRootDescriptorTable(0, m_cbvHeap.GetGpuHandle(0));
         m_commandList->RSSetViewports(1, &m_viewport);
         m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
@@ -399,17 +457,17 @@ namespace Illulu
         D3D12_RESOURCE_BARRIER resourceBarrier
         {
             CD3DX12_RESOURCE_BARRIER::Transition(
-                m_renderTargets[m_frameIndex].Get(),
-                D3D12_RESOURCE_STATE_PRESENT, 
+                m_swapChain.m_buffers[m_swapChain.m_backbufferIndex].Get(),
+                D3D12_RESOURCE_STATE_PRESENT,
                 D3D12_RESOURCE_STATE_RENDER_TARGET)
         };
 
         m_commandList->ResourceBarrier(1, &resourceBarrier);
 
         CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(
-            m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), 
-            m_frameIndex, 
-            m_rtvDescriptorSize
+            m_swapChain.m_rtvHeap.GetCpuHandle(0),
+            m_swapChain.m_backbufferIndex,
+            m_swapChain.m_rtvHeap.GetDescSize()
         );
         m_commandList->OMSetRenderTargets(1, &rtvHandle, false, nullptr);
 
@@ -418,15 +476,19 @@ namespace Illulu
         m_commandList->ClearRenderTargetView(rtvHandle, clearColor.data(), 0, nullptr);
         m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
-        m_commandList->DrawInstanced(3, 1, 0, 0);
+        m_commandList->IASetIndexBuffer(&m_indexBufferView);
+        m_commandList->DrawIndexedInstanced(
+            static_cast<u32>(boxIndices.size()),
+            1, 0, 0, 0
+        );
 
         // present backbuffer
         resourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
-                m_renderTargets[m_frameIndex].Get(),
+                m_swapChain.m_buffers[m_swapChain.m_backbufferIndex].Get(),
                 D3D12_RESOURCE_STATE_RENDER_TARGET,
                 D3D12_RESOURCE_STATE_PRESENT
         );
-        
+
         m_commandList->ResourceBarrier(1, &resourceBarrier);
         WIN_CHECK(m_commandList->Close());
     }
@@ -434,44 +496,33 @@ namespace Illulu
     void Renderer::_WaitForGpu()
     {
         // Schedule a Signal command in the queue.
-        WIN_CHECK(m_commandQueue->Signal(m_fence.Get(), m_fenceValues[m_frameIndex]));
+        WIN_CHECK(m_commandQueue->Signal(m_fence.Get(), m_fenceValues[m_swapChain.m_backbufferIndex]));
 
         // Wait until the fence has been processed.
-        WIN_CHECK(m_fence->SetEventOnCompletion(m_fenceValues[m_frameIndex], m_fenceEvent.Get()));
+        WIN_CHECK(m_fence->SetEventOnCompletion(m_fenceValues[m_swapChain.m_backbufferIndex], m_fenceEvent.Get()));
         WaitForSingleObjectEx(m_fenceEvent.Get(), INFINITE, false);
 
         // Increment the fence value for the current frame.
-        m_fenceValues[m_frameIndex]++;
+        m_fenceValues[m_swapChain.m_backbufferIndex]++;
     }
 
-    void Renderer::_MoveToNextFrame()
+    void Renderer::_EndFrame()
     {
         // Schedule a Signal command in the queue.
-        const UINT64 currentFenceValue = m_fenceValues[m_frameIndex];
+        const u64 currentFenceValue = m_fenceValues[m_swapChain.m_backbufferIndex];
         WIN_CHECK(m_commandQueue->Signal(m_fence.Get(), currentFenceValue));
 
         // Update the frame index.
-        m_frameIndex = static_cast<u8>(m_swapchain->GetCurrentBackBufferIndex());
+        m_swapChain.UpdateBackbufferIndex();
 
         // If the next frame is not ready to be rendered yet, wait until it is ready.
-        if (m_fence->GetCompletedValue() < m_fenceValues[m_frameIndex])
+        if (m_fence->GetCompletedValue() < m_fenceValues[m_swapChain.m_backbufferIndex])
         {
-            WIN_CHECK(m_fence->SetEventOnCompletion(m_fenceValues[m_frameIndex], m_fenceEvent.Get()));
+            WIN_CHECK(m_fence->SetEventOnCompletion(m_fenceValues[m_swapChain.m_backbufferIndex], m_fenceEvent.Get()));
             WaitForSingleObjectEx(m_fenceEvent.Get(), INFINITE, false);
         }
 
         // Set the fence value for the next frame.
-        m_fenceValues[m_frameIndex] = currentFenceValue + 1;
-    }
-
-    f32 Renderer::_GetRenderTargetAspectRatio() const
-    {
-        ILL_ASSERT(m_renderTargetHeight > 0);
-        return static_cast<f32>(m_renderTargetWidth) / static_cast<f32>(m_renderTargetHeight);
-    }
-
-    ID3D12Resource* Renderer::_GetCurrentBackbuffer() noexcept
-    {
-        return m_renderTargets[m_frameIndex].Get();
+        m_fenceValues[m_swapChain.m_backbufferIndex] = currentFenceValue + 1;
     }
 }

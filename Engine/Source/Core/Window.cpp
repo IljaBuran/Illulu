@@ -1,17 +1,16 @@
-#include "Core/Window.h"
+#include "Core/Window.hpp"
 
-#include "Core/Input.h"
+#include "Common.hpp"
 
-#include "Common.h"
-#include "WindowsMin.h"
+#include "Core/Input.hpp"
 
-#include "backends/imgui_impl_win32.h"
 
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+//#include "backends/imgui_impl_win32.h"
+
+//extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 namespace Illulu
 {
-
     Window::Window(Input& input)
         : m_input(input)
     {
@@ -61,6 +60,8 @@ namespace Illulu
         );
 
         ILL_ASSERT(m_hWnd);
+
+        INFO(L"Win32 window initialized successfully");
     }
 
     void Window::Show() const noexcept
@@ -99,14 +100,22 @@ namespace Illulu
         static i32 newWidth{};
         static i32 newHeight{};
 
+        i32 xMousePos{};
+        i32 yMousePos{};
+
+        MouseButton mouseButton{MouseButton::COUNT};
+
         auto lResize = [&]()
         {
             if (m_width == newWidth && m_height == newHeight)
-                return 0;
+                return;
+
+            INFO(L"[WINDOW] Resized from {}x{} to {}x{}", m_width, m_height, newWidth, newHeight);
+
+            m_resizeDelegate.Call(newWidth, newHeight);
 
             m_width = newWidth;
             m_height = newHeight;
-            m_resizeDelegate.Call(m_width, m_height);
         };
 
         switch (uMsg)
@@ -127,29 +136,75 @@ namespace Illulu
                 return 0;
             }
 
+            // if mouse -> update new x-y coordinates
+            if (WM_MOUSEFIRST <= uMsg && uMsg <= WM_MOUSELAST)
+            {
+                xMousePos = static_cast<i16>(LOWORD(lParam));
+                yMousePos = static_cast<i16>(HIWORD(lParam));
+            }
+
+            case WM_LBUTTONDOWN:
+            {
+                mouseButton = MouseButton::LEFT;
+                m_input.NotifyMouseDown(mouseButton);
+            }
+
+            case WM_LBUTTONUP:
+            {
+                mouseButton = MouseButton::LEFT;
+                m_input.NotifyMouseUp(mouseButton);
+            }
+
+            case WM_RBUTTONDOWN:
+            {
+                mouseButton = MouseButton::RIGHT;
+                m_input.NotifyMouseDown(mouseButton);
+            }
+
+            case WM_RBUTTONUP:
+            {
+                mouseButton = MouseButton::RIGHT;
+                m_input.NotifyMouseUp(mouseButton);
+            }
+
+            case WM_MBUTTONDOWN:
+            {
+                mouseButton = MouseButton::MIDDLE;
+                m_input.NotifyMouseDown(mouseButton);
+            }
+
+            case WM_MBUTTONUP:
+            {
+                mouseButton = MouseButton::MIDDLE;
+                m_input.NotifyMouseUp(mouseButton);
+            }
+
             [[unlikely]] case WM_CLOSE:
             {
-                i32 res = MessageBox(m_hWnd, L"Sure you want to exit?", L"Close", MB_YESNO);
-                if (res == IDYES)
-                {
-                    DestroyWindow(m_hWnd);
-                    m_shouldClose = true;
-                }
+                INFO(L"[WINDOW] Close button pressed");
+
+                DestroyWindow(m_hWnd);
+                m_shouldClose = true;
                 return 0;
             }
 
             [[unlikely]] case WM_SETFOCUS:
             {
+                //INFO(L"[WINDOW] Focused");
+
                 m_focused = true;
                 return 0;
             }
 
             [[unlikely]] case WM_KILLFOCUS:
             {
+                //INFO(L"[WINDOW] Unfocused");
+
                 m_focused = false;
+                m_input.NotifyInvalidateMousePosition();
+
                 return 0;
             }
-            
 
             [[unlikely]] case WM_SIZE:
             {
@@ -160,11 +215,15 @@ namespace Illulu
                 {
                     case SIZE_MINIMIZED:
                     {
+                        INFO(L"[WINDOW] Minimized");
+
                         m_minimized = true;
                         return 0;
                     }
                     case SIZE_MAXIMIZED:
                     {
+                        INFO(L"[WINDOW] Maximized");
+
                         m_minimized = false;
                         m_maximized = true;
 
@@ -212,8 +271,8 @@ namespace Illulu
         static Window* thisWindow = nullptr;
 
         // note(ilja): this needs to be here for imgui
-        if (ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam))
-            return true;
+        //if (ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam))
+        //    return true;
 
         if (uMsg == WM_NCCREATE) [[unlikely]]
         {
@@ -238,7 +297,7 @@ namespace Illulu
             return DefWindowProc(hWnd, uMsg, wParam, lParam);
         }
 
-        // if pointer is already assign, then call our non-static member function
+        // if the pointer is already assign, then call our non-static member function
         return thisWindow ? thisWindow->_HandleMessages(uMsg, wParam, lParam)
             : DefWindowProc(hWnd, uMsg, wParam, lParam);
     }

@@ -1,8 +1,8 @@
-#include "Common.h"
+#include "Common.hpp"
 
-#include "WindowsMin.h"
+#include "WindowsMin.hpp"
 
-#include "Core/Engine.h"
+#include "Core/Engine.hpp"
 
 extern "C"
 {
@@ -11,10 +11,11 @@ extern "C"
 }
 
 int WinMain(
-    [[maybe_unused]] HINSTANCE hInstance,
-    [[maybe_unused]] HINSTANCE hPrevInstance,
-    [[maybe_unused]] LPSTR lpCmdLine,
-    [[maybe_unused]] INT nCmdShow)
+    UNUSED HINSTANCE hInstance,
+    UNUSED HINSTANCE hPrevInstance,
+    UNUSED LPSTR lpCmdLine,
+    UNUSED INT nCmdShow
+)
 {
     Illulu::Engine engine;
 
@@ -24,7 +25,7 @@ int WinMain(
     }
     catch (Illulu::ILLException e)
     {
-        MessageBox(nullptr, (e.GetMessageW()).c_str(), L"Assertion failed", MB_OK);
+        MessageBox(nullptr, (e.GetErrorMessage()).c_str(), L"Assertion failed", MB_OK);
     }
 
     return 0;

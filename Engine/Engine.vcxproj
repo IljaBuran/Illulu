@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="..\packages\Microsoft.Direct3D.D3D12.1.619.3\build\native\Microsoft.Direct3D.D3D12.props" Condition="Exists('..\packages\Microsoft.Direct3D.D3D12.1.619.3\build\native\Microsoft.Direct3D.D3D12.props')" />
   <ItemGroup Label="ProjectConfigurations">
@@ -56,14 +56,16 @@
     <ClCompile>
       <WarningLevel>Level4</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions);ILL_STL</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions);ILL_STL;DX_DEBUG</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <TreatWarningAsError>false</TreatWarningAsError>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <FloatingPointModel>Fast</FloatingPointModel>
       <DisableSpecificWarnings>28251</DisableSpecificWarnings>
-      <AdditionalIncludeDirectories>$(ProjectDir)Source\;$(ProjectDir)Source\Common\;$(ProjectDir)ThirdParty\imgui\;$(ProjectDir)ThirdParty\directxtk12\Inc\;$(ProjectDir)ThirdParty\DirectXShaderCompiler\inc;$(ProjectDir)ThirdParty\nlohmann-json\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)Source\;$(ProjectDir)Source\Common\;$(ProjectDir)ThirdParty\imgui\;$(ProjectDir)ThirdParty\directxtk12\Inc\;$(ProjectDir)ThirdParty\DirectXShaderCompiler\inc;$(ProjectDir)ThirdParty\nlohmann-json\;$(ProjectDir)ThirdParty\magic_enum\</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -81,15 +83,17 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions);ILL_STL</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions);ILL_STL;DX_DEBUG</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <FloatingPointModel>Fast</FloatingPointModel>
       <DisableSpecificWarnings>28251</DisableSpecificWarnings>
-      <AdditionalIncludeDirectories>$(ProjectDir)Source\;$(ProjectDir)Source\Common\;$(ProjectDir)ThirdParty\imgui\;$(ProjectDir)ThirdParty\directxtk12\Inc\;$(ProjectDir)ThirdParty\DirectXShaderCompiler\inc;$(ProjectDir)ThirdParty\nlohmann-json\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)Source\;$(ProjectDir)Source\Common\;$(ProjectDir)ThirdParty\imgui\;$(ProjectDir)ThirdParty\directxtk12\Inc\;$(ProjectDir)ThirdParty\DirectXShaderCompiler\inc;$(ProjectDir)ThirdParty\nlohmann-json\;$(ProjectDir)ThirdParty\magic_enum\</AdditionalIncludeDirectories>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -102,16 +106,24 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Source\D3D12\CommandList.cpp" />
+    <ClCompile Include="Source\D3D12\CommandListAllocator.cpp" />
+    <ClCompile Include="Source\D3D12\CommandQueue.cpp" />
+    <ClCompile Include="Source\D3D12\ConstantBuffer.cpp" />
+    <ClCompile Include="Source\D3D12\UploadBuffer.cpp" />
     <ClCompile Include="Source\Core\AssetManager.cpp" />
     <ClCompile Include="Source\Core\Filesystem.cpp" />
-    <ClCompile Include="Source\RHI\DescriptorUtil.cpp" />
+    <ClCompile Include="Source\D3D12\DescriptorUtil.cpp" />
     <ClCompile Include="Source\Core\Renderer.cpp" />
     <ClCompile Include="Source\Core\Engine.cpp" />
     <ClCompile Include="Source\Core\Input.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="Source\RHI\InfoQueue.cpp" />
-    <ClCompile Include="Source\RHI\Util.cpp" />
+    <ClCompile Include="Source\D3D12\Device.cpp" />
+    <ClCompile Include="Source\D3D12\Factory.cpp" />
+    <ClCompile Include="Source\D3D12\InfoQueue.cpp" />
+    <ClCompile Include="Source\D3D12\SwapChain.cpp" />
+    <ClCompile Include="Source\D3D12\Util.cpp" />
     <ClCompile Include="Source\WinMain.cpp" />
     <ClCompile Include="ThirdParty\imgui\backends\imgui_impl_dx12.cpp" />
     <ClCompile Include="ThirdParty\imgui\backends\imgui_impl_win32.cpp" />
@@ -126,23 +138,39 @@
     <ClCompile Include="Source\Core\Timer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Source\Core\AssetManager.h" />
-    <ClInclude Include="Source\Common\Array.h" />
-    <ClInclude Include="Source\Common\Constants.h" />
-    <ClInclude Include="Source\Common\DX12.h" />
-    <ClInclude Include="Source\Common\Vector.h" />
-    <ClInclude Include="Source\Core\Filesystem.h" />
-    <ClInclude Include="Source\RHI\InfoQueue.h" />
-    <ClInclude Include="Source\RHI\DescriptorUtil.h" />
-    <ClInclude Include="Source\Core\Renderer.h" />
-    <ClInclude Include="Source\Core\Engine.h" />
-    <ClInclude Include="Source\Common\Debug.h" />
-    <ClInclude Include="Source\Core\Input.h" />
-    <ClInclude Include="Source\Common\Common.h" />
-    <ClInclude Include="Source\Common\Types.h" />
-    <ClInclude Include="Source\Common\WindowsMin.h" />
-    <ClInclude Include="Source\RHI\Util.h" />
-    <ClInclude Include="Source\Util\Delegate.h" />
+    <ClInclude Include="Source\Common\BitSet.hpp" />
+    <ClInclude Include="Source\Common\Data.hpp" />
+    <ClInclude Include="Source\Common\Pair.hpp" />
+    <ClInclude Include="Source\D3D12\CommandList.hpp" />
+    <ClInclude Include="Source\D3D12\CommandListAllocator.hpp" />
+    <ClInclude Include="Source\D3D12\CommandQueue.hpp" />
+    <ClInclude Include="Source\D3D12\UploadBuffer.hpp" />
+    <ClInclude Include="Source\Common\Queue.hpp" />
+    <ClInclude Include="Source\Common\String.hpp" />
+    <ClInclude Include="Source\Common\HashSet.hpp" />
+    <ClInclude Include="Source\Core\Console.hpp" />
+    <ClInclude Include="Source\Core\AssetManager.hpp" />
+    <ClInclude Include="Source\Common\Array.hpp" />
+    <ClInclude Include="Source\Common\Constants.hpp" />
+    <ClInclude Include="Source\Common\DX12.hpp" />
+    <ClInclude Include="Source\Common\Vector.hpp" />
+    <ClInclude Include="Source\Core\Filesystem.hpp" />
+    <ClInclude Include="Source\D3D12\Device.hpp" />
+    <ClInclude Include="Source\D3D12\Factory.hpp" />
+    <ClInclude Include="Source\D3D12\HardwareInfo.hpp" />
+    <ClInclude Include="Source\D3D12\SwapChain.hpp" />
+    <ClInclude Include="Source\Math\Math.hpp" />
+    <ClInclude Include="Source\D3D12\InfoQueue.hpp" />
+    <ClInclude Include="Source\D3D12\DescriptorUtil.hpp" />
+    <ClInclude Include="Source\Core\Renderer.hpp" />
+    <ClInclude Include="Source\Core\Engine.hpp" />
+    <ClInclude Include="Source\Common\Debug.hpp" />
+    <ClInclude Include="Source\Core\Input.hpp" />
+    <ClInclude Include="Source\Common\Common.hpp" />
+    <ClInclude Include="Source\Common\Types.hpp" />
+    <ClInclude Include="Source\Common\WindowsMin.hpp" />
+    <ClInclude Include="Source\D3D12\Util.hpp" />
+    <ClInclude Include="Source\Util\Delegate.hpp" />
     <ClInclude Include="ThirdParty\imgui\backends\imgui_impl_dx12.h" />
     <ClInclude Include="ThirdParty\imgui\backends\imgui_impl_win32.h" />
     <ClInclude Include="ThirdParty\imgui\imconfig.h" />
@@ -151,8 +179,8 @@
     <ClInclude Include="ThirdParty\imgui\imstb_rectpack.h" />
     <ClInclude Include="ThirdParty\imgui\imstb_textedit.h" />
     <ClInclude Include="ThirdParty\imgui\imstb_truetype.h" />
-    <ClInclude Include="Source\Core\Window.h" />
-    <ClInclude Include="Source\Core\Timer.h" />
+    <ClInclude Include="Source\Core\Window.hpp" />
+    <ClInclude Include="Source\Core\Timer.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
