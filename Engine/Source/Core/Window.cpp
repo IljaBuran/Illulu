@@ -97,13 +97,17 @@ namespace Illulu
 
     LRESULT Window::_HandleMessages(u32 uMsg, WPARAM wParam, LPARAM lParam) noexcept
     {
-        static i32 newWidth{};
-        static i32 newHeight{};
+        static i32 newWidth{}, newHeight{};
 
-        i32 xMousePos{};
-        i32 yMousePos{};
+        i32 xMousePos{}, yMousePos{};
 
-        MouseButton mouseButton{MouseButton::COUNT};
+        // if mouse -> update new x-y coordinates
+        if (WM_MOUSEFIRST <= uMsg && uMsg <= WM_MOUSELAST)
+        {
+            xMousePos = static_cast<i16>(LOWORD(lParam));
+            yMousePos = static_cast<i16>(HIWORD(lParam));
+            m_input.NotifyNewMousePostition(xMousePos, yMousePos);
+        }
 
         auto lResize = [&]()
         {
@@ -136,47 +140,40 @@ namespace Illulu
                 return 0;
             }
 
-            // if mouse -> update new x-y coordinates
-            if (WM_MOUSEFIRST <= uMsg && uMsg <= WM_MOUSELAST)
-            {
-                xMousePos = static_cast<i16>(LOWORD(lParam));
-                yMousePos = static_cast<i16>(HIWORD(lParam));
-            }
-
             case WM_LBUTTONDOWN:
             {
-                mouseButton = MouseButton::LEFT;
-                m_input.NotifyMouseDown(mouseButton);
+                m_input.NotifyMouseDown(MouseButton::LEFT);
+                return 0;
             }
 
             case WM_LBUTTONUP:
             {
-                mouseButton = MouseButton::LEFT;
-                m_input.NotifyMouseUp(mouseButton);
+                m_input.NotifyMouseUp(MouseButton::LEFT);
+                return 0;
             }
 
             case WM_RBUTTONDOWN:
             {
-                mouseButton = MouseButton::RIGHT;
-                m_input.NotifyMouseDown(mouseButton);
+                m_input.NotifyMouseDown(MouseButton::RIGHT);
+                return 0;
             }
 
             case WM_RBUTTONUP:
             {
-                mouseButton = MouseButton::RIGHT;
-                m_input.NotifyMouseUp(mouseButton);
+                m_input.NotifyMouseUp(MouseButton::RIGHT);
+                return 0;
             }
 
             case WM_MBUTTONDOWN:
             {
-                mouseButton = MouseButton::MIDDLE;
-                m_input.NotifyMouseDown(mouseButton);
+                m_input.NotifyMouseDown(MouseButton::MIDDLE);
+                return 0;
             }
 
             case WM_MBUTTONUP:
             {
-                mouseButton = MouseButton::MIDDLE;
-                m_input.NotifyMouseUp(mouseButton);
+                m_input.NotifyMouseUp(MouseButton::MIDDLE);
+                return 0;
             }
 
             [[unlikely]] case WM_CLOSE:

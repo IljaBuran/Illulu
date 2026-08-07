@@ -17,27 +17,9 @@ namespace Illulu
         {
             _Update();
 
-            static bool first{true};
-            static i32 x{};
-            static i32 y{};
-
-            if (m_input.IsMouseBtnPressed(MouseButton::LEFT))
+            if (i32 dX = m_input.xMouseDelta, dY = m_input.yMouseDelta; dX || dY)
             {
-                i32 newX = m_input.xMousePosition;
-                i32 newY = m_input.yMousePosition;
-
-                if (first)
-                {
-                    INFO(L"First click: ({},{})", newX, newY);
-                    first = false;
-                }
-                else
-                {
-                    INFO(L"New click: ({},{})", newX, newY);
-                    INFO(L"Delta: ({},{})", x - newX, y - newY);
-                }
-                x = newX;
-                y = newY;
+                INFO(L"Delta:({},{})", dX, dY);
             }
         }
     }
