@@ -10,7 +10,7 @@ namespace Illulu::D3D12
     {
         if (isConstantBuffer)
         {
-            m_elementByteSize = AlignUp<D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT>(m_elementByteSize);
+            m_elementByteSize = AlignUp<D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT, m_elementByteSize>();
         }
 
         auto properties{CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)};

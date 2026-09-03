@@ -3,6 +3,9 @@
 #if defined(ILL_STL)
 #include <vector>
 
-template<typename T>
-using Vector = std::vector<T>;
-#endif
+template<
+    class T,
+    class Allocator = std::allocator<T>
+>
+using Vector = std::vector<T, Allocator>;
+#endif // defined(ILL_STL)

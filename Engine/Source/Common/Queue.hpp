@@ -1,8 +1,11 @@
 #pragma once
 
-#ifdef ILL_STL
+#if defined(ILL_STL)
 #include <queue>
 
-template<typename T>
-using Queue = std::queue<T>;
-#endif
+template<
+    class T,
+    class Container = std::deque<T>
+>
+using Queue = std::queue<T, Container>;
+#endif // defined(ILL_STL)

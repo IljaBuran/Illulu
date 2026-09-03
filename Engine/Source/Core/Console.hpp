@@ -6,10 +6,13 @@
 #include "Array.hpp"
 #include "String.hpp"
 
+#include <memory>
+
 #include <utility>
 #include <format>
 
-#include <iostream>
+#include "RingBuffer.hpp"
+#include "Vector.hpp"
 
 namespace Illulu
 {
@@ -20,6 +23,14 @@ namespace Illulu
         FATAL,
         COUNT
     };
+
+    struct LogEntry
+    {
+        LogType type{ LogType::COUNT };
+        String str; // brrr, every entry is allocated
+    };
+
+    static constexpr u32 LOG_HISTORY_CAPACITY{ 100 };
 
     FORCEINLINE static constexpr 
     u16 GetTextAttributesByLogType(LogType logType) noexcept
@@ -41,62 +52,29 @@ namespace Illulu
         static constexpr 
         Array<StringView, static_cast<u64>(LogType::COUNT)> logTypePrefixes
         {
-            L"[INFO] ",
-            L"[WARNING] ",
-            L"[FATAL] "
+            L"[INFO]",
+            L"[WARNING]",
+            L"[FATAL]"
         };
 
         return logTypePrefixes[static_cast<u64>(logType)];
     }
     
-    class Console 
+    class Console
     {
     public:
-    
-        static void Log(LogType type, StringView str) noexcept
-        {
-            static Console& console = Console::_Instance();
-
-            String s(GetPrefixByLogType(type));
-            s += str;
-            s += L"\n";
-
-            SetConsoleTextAttribute(
-                console.m_consoleHandle,
-                GetTextAttributesByLogType(type)
-            );
-             
-            DWORD written{0};
-            WriteConsole(console.m_consoleHandle, s.data(), static_cast<DWORD>(s.size()), &written, nullptr);
-        };
-
-        template<typename... Args>
-        static void Log(LogType type, std::wformat_string<Args...> format, Args&&... args)
-        {
-            static Console& console = Console::_Instance();
-            
-            String s(GetPrefixByLogType(type));
-            s += std::format(format, std::forward<Args>(args)...);
-            s += L"\n";
-
-            SetConsoleTextAttribute(
-                console.m_consoleHandle,
-                GetTextAttributesByLogType(type)
-            );
-
-            DWORD written{0};
-            WriteConsole(console.m_consoleHandle, s.data(), static_cast<DWORD>(s.size()), &written, nullptr);
-        }
-
-    private:
-
-        static Console& _Instance() noexcept
-        {
-            static Console instance;
-            return instance;
-        }
         
-        Console()
+        virtual ~Console() = default;
+        // here it will receive already formatted string, 
+        //  the Console is responsible for is coloring
+        virtual void Log(LogType type, StringView str) = 0;
+    };
+
+    class WindowsNativeConsole : public Console
+    {
+    public:
+        
+        WindowsNativeConsole()
         {
             ILL_ASSERT(!m_consoleHandle);
 
@@ -107,10 +85,10 @@ namespace Illulu
             ILL_ASSERT(m_consoleHandle != INVALID_HANDLE_VALUE);
 
             /* Disabling close button on console window */
-            HWND hWndConsole = GetConsoleWindow();
-            HMENU menu = GetSystemMenu(hWndConsole, false);
-            ILL_ASSERT(hWndConsole && menu);
-            
+            m_hWnd = GetConsoleWindow();
+            HMENU menu = GetSystemMenu(m_hWnd, false);
+            ILL_ASSERT(m_hWnd && menu);
+
             u32 flags = MF_BYCOMMAND | MF_GRAYED | MF_DISABLED;
             EnableMenuItem(menu, SC_CLOSE, flags);
 
@@ -126,20 +104,104 @@ namespace Illulu
             //SetConsoleMode(inputHandle, mode);
         }
 
-        ~Console()
+        ~WindowsNativeConsole()
         {
             if (m_consoleHandle)
                 ILL_VERIFY(FreeConsole());
 
             m_consoleHandle = nullptr;
         }
+        
+        void Log(LogType type, StringView str) override
+        {
+            SetConsoleTextAttribute(
+                m_consoleHandle,
+                GetTextAttributesByLogType(type)
+            );
 
-        Console(const Console&) = delete;
-        Console& operator=(const Console&) = delete;
+            DWORD written{ 0 };
+            WriteConsole(m_consoleHandle, str.data(), static_cast<DWORD>(str.size()), &written, nullptr);
+        }
 
-        Console(Console&&) = delete;
-        Console& operator=(Console&&) = delete;
+    private:
 
-        HANDLE m_consoleHandle;
+        HANDLE m_consoleHandle{};
+        HWND m_hWnd{};
+    };
+
+    class ImGUIConsole : public Console
+    {
+    public:
+
+        ImGUIConsole()
+        {
+        }
+
+        ~ImGUIConsole()
+        {
+
+        }
+
+        void Log(LogType type, StringView str) override
+        {
+            UNREFERENCED_PARAMETER(type);
+            UNREFERENCED_PARAMETER(str);
+
+        }
+    };
+
+    class Logger
+    {
+    public:
+    
+        static 
+        void Log(LogType type, StringView str) noexcept
+        {
+            String message = std::format(L"{} {}\n", GetPrefixByLogType(type), str);
+
+            m_logHistory.Add(LogEntry{ type, message });
+
+            for (auto& console : m_consoles)
+            {
+                console->Log(type, message);
+            }
+        };
+
+        template<typename... Args>
+        static 
+        void Log(LogType type, std::wformat_string<Args...> format, Args&&... args)
+        {
+            String s = std::format(
+                format,
+                std::forward<Args>(args)...
+            );
+
+            String message = std::format(L"{} {}\n", GetPrefixByLogType(type), s);
+
+            m_logHistory.Add(LogEntry{ type, message });
+
+            for (auto& console : m_consoles)
+            {
+                console->Log(type, message);
+            }
+        }
+        
+        static void Add(std::unique_ptr<Console> console) noexcept
+        {
+            ILL_ASSERT(console);
+
+            m_consoles.emplace_back(std::move(console));
+        }
+        
+        [[nodiscard]] static
+        const RingBuffer<LogEntry, LOG_HISTORY_CAPACITY>& GetLogHistory()
+        {
+            return m_logHistory;
+        }
+
+    private:
+
+        inline static Vector<std::unique_ptr<Console>> m_consoles;
+        inline static RingBuffer<LogEntry, LOG_HISTORY_CAPACITY> m_logHistory;
     };
 }

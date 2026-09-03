@@ -1,0 +1,19 @@
+Entity: u32
+
+
+EntityManager: tracker between entities and it's components
+
+    How do I know which components certain entity has?
+        - bitset?
+
+    Can an entity have more than one compononent of same type?
+        - non-sense to have 2 positions, but maybe ?
+
+    Recyclability
+        - during game entities gets created and destroyed -> need a tracker for used/unused IDs
+
+
+COMPONENT                          |                 ECS              |
+
+ Component register                ->                 ECS
+

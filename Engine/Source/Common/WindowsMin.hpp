@@ -9,3 +9,12 @@
 #endif
 
 #include <Windows.h>
+#include <comdef.h>
+
+#include "String.hpp"
+
+inline String TranslateHResult(HRESULT hRes)
+{
+	_com_error err(hRes);
+	return err.ErrorMessage();
+}

@@ -6,14 +6,14 @@ namespace Illulu::Filesystem
 	{
 		CREATEFILE2_EXTENDED_PARAMETERS extendedParams
 		{
-			.dwSize{sizeof(CREATEFILE2_EXTENDED_PARAMETERS)},
-			.dwFileAttributes{FILE_ATTRIBUTE_NORMAL},
-			.dwFileFlags{FILE_FLAG_SEQUENTIAL_SCAN},
-			.dwSecurityQosFlags{SECURITY_ANONYMOUS},
-			.lpSecurityAttributes{nullptr},
-			.hTemplateFile{nullptr}
+			.dwSize { sizeof(CREATEFILE2_EXTENDED_PARAMETERS) },
+			.dwFileAttributes{ FILE_ATTRIBUTE_NORMAL },
+			.dwFileFlags{ FILE_FLAG_SEQUENTIAL_SCAN },
+			.dwSecurityQosFlags{ SECURITY_ANONYMOUS },
+			.lpSecurityAttributes{ nullptr },
+			.hTemplateFile{ nullptr }
 		};
-	
+
 		FileHandle fileHandle(CreateFile2(path.data(), GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, &extendedParams));
 		ILL_ASSERT(fileHandle.IsValid());
 
@@ -26,7 +26,7 @@ namespace Illulu::Filesystem
 
 		u32 fileSize = fileInfo.EndOfFile.LowPart;
 		Vector<byte> data(fileSize);
-	
+
 		UNUSED DWORD bytesRead{};
 		ILL_VERIFY(ReadFile(fileHandle.Get(), data.data(), fileSize, &bytesRead, nullptr));
 

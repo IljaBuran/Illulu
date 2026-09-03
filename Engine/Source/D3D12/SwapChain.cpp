@@ -55,7 +55,7 @@ namespace Illulu::D3D12
         m_backbufferIndex = m_dxgiSwapChain->GetCurrentBackBufferIndex();
 
         /* Create RTV's descriptor heap */
-        m_rtvHeap.Create(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, FRAMEBUFFER_COUNT);
+        m_rtvHeap.Initialize(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, FRAMEBUFFER_COUNT);
 
         CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap.GetCpuHandle(0));
 

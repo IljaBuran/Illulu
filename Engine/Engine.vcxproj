@@ -70,8 +70,8 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(ProjectDir)ThirdParty\directxtk12\Lib\Debug;$(ProjectDir)ThirdParty\DirectXShaderCompiler\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>dxcompiler.lib;d3d12.lib;dxgi.lib;DirectXTK12.lib;dxil.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)ThirdParty\directxtk12\Lib\Debug;$(ProjectDir)ThirdParty\imgui\lib\Debug;$(ProjectDir)ThirdParty\DirectXShaderCompiler\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
@@ -98,8 +98,8 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(ProjectDir)ThirdParty\directxtk12\Lib\Release;$(ProjectDir)ThirdParty\DirectXShaderCompiler\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>dxcompiler.lib;d3d12.lib;dxgi.lib;DirectXTK12.lib;dxil.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)ThirdParty\directxtk12\Lib\Release;$(ProjectDir)ThirdParty\imgui\lib\Release;$(ProjectDir)ThirdParty\DirectXShaderCompiler\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
@@ -109,9 +109,8 @@
     <ClCompile Include="Source\D3D12\CommandList.cpp" />
     <ClCompile Include="Source\D3D12\CommandListAllocator.cpp" />
     <ClCompile Include="Source\D3D12\CommandQueue.cpp" />
-    <ClCompile Include="Source\D3D12\ConstantBuffer.cpp" />
+    <ClCompile Include="Source\D3D12\Shader.cpp" />
     <ClCompile Include="Source\D3D12\UploadBuffer.cpp" />
-    <ClCompile Include="Source\Core\AssetManager.cpp" />
     <ClCompile Include="Source\Core\Filesystem.cpp" />
     <ClCompile Include="Source\D3D12\DescriptorUtil.cpp" />
     <ClCompile Include="Source\Core\Renderer.cpp" />
@@ -124,14 +123,8 @@
     <ClCompile Include="Source\D3D12\InfoQueue.cpp" />
     <ClCompile Include="Source\D3D12\SwapChain.cpp" />
     <ClCompile Include="Source\D3D12\Util.cpp" />
+    <ClCompile Include="Source\Util\FileWatcher.cpp" />
     <ClCompile Include="Source\WinMain.cpp" />
-    <ClCompile Include="ThirdParty\imgui\backends\imgui_impl_dx12.cpp" />
-    <ClCompile Include="ThirdParty\imgui\backends\imgui_impl_win32.cpp" />
-    <ClCompile Include="ThirdParty\imgui\imgui.cpp" />
-    <ClCompile Include="ThirdParty\imgui\imgui_demo.cpp" />
-    <ClCompile Include="ThirdParty\imgui\imgui_draw.cpp" />
-    <ClCompile Include="ThirdParty\imgui\imgui_tables.cpp" />
-    <ClCompile Include="ThirdParty\imgui\imgui_widgets.cpp" />
     <ClCompile Include="Source\Core\Window.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
@@ -140,16 +133,22 @@
   <ItemGroup>
     <ClInclude Include="Source\Common\BitSet.hpp" />
     <ClInclude Include="Source\Common\Data.hpp" />
+    <ClInclude Include="Source\Common\HashMap.hpp" />
+    <ClInclude Include="Source\Common\Map.hpp" />
     <ClInclude Include="Source\Common\Pair.hpp" />
+    <ClInclude Include="Source\Common\RingBuffer.hpp" />
+    <ClInclude Include="Source\Common\Set.hpp" />
+    <ClInclude Include="Source\Common\SparseSet.hpp" />
+    <ClInclude Include="Source\Core\ShaderManager.hpp" />
     <ClInclude Include="Source\D3D12\CommandList.hpp" />
     <ClInclude Include="Source\D3D12\CommandListAllocator.hpp" />
     <ClInclude Include="Source\D3D12\CommandQueue.hpp" />
+    <ClInclude Include="Source\D3D12\Shader.hpp" />
     <ClInclude Include="Source\D3D12\UploadBuffer.hpp" />
     <ClInclude Include="Source\Common\Queue.hpp" />
     <ClInclude Include="Source\Common\String.hpp" />
     <ClInclude Include="Source\Common\HashSet.hpp" />
     <ClInclude Include="Source\Core\Console.hpp" />
-    <ClInclude Include="Source\Core\AssetManager.hpp" />
     <ClInclude Include="Source\Common\Array.hpp" />
     <ClInclude Include="Source\Common\Constants.hpp" />
     <ClInclude Include="Source\Common\DX12.hpp" />
@@ -170,7 +169,11 @@
     <ClInclude Include="Source\Common\Types.hpp" />
     <ClInclude Include="Source\Common\WindowsMin.hpp" />
     <ClInclude Include="Source\D3D12\Util.hpp" />
+    <ClInclude Include="Source\Scene\Component.hpp" />
+    <ClInclude Include="Source\Scene\ECS.hpp" />
+    <ClInclude Include="Source\Scene\Scene.hpp" />
     <ClInclude Include="Source\Util\Delegate.hpp" />
+    <ClInclude Include="Source\Util\FileWatcher.hpp" />
     <ClInclude Include="ThirdParty\imgui\backends\imgui_impl_dx12.h" />
     <ClInclude Include="ThirdParty\imgui\backends\imgui_impl_win32.h" />
     <ClInclude Include="ThirdParty\imgui\imconfig.h" />
@@ -186,7 +189,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="..\Resources\Shaders\Basic.hlsl">
+    <None Include="..\Resources\Shaders\Basic.hlsl">
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</DeploymentContent>
       <FileType>Document</FileType>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
@@ -198,7 +201,15 @@ dxc.exe -nologo -Tps_6_0 -E"PSMain" -Zi -Qembed_debug -Fo"$(OutDir)%(Filename)_P
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(Identity)</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)%(Filename)_VSMain.cso;$(OutDir)%(Filename)_PSMain.cso</Outputs>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)%(Filename)_VSMain.cso;$(OutDir)%(Filename)_PSMain.cso</Outputs>
-    </CustomBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </EntryPointName>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.8</ShaderModel>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </EntryPointName>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.8</ShaderModel>
+    </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

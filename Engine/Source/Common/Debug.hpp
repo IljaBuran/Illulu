@@ -4,13 +4,7 @@
 #include "WindowsMin.hpp"
 #include "String.hpp"
 
-#include <type_traits>
-#include <stdexcept>
-#include <exception>
 #include <iterator>
-#include <bitset>
-#include <format>
-#include <comdef.h>
 
 namespace Illulu
 {
@@ -25,8 +19,8 @@ namespace Illulu
         String GetErrorMessage() const
         {
             _com_error err(m_hRes);
-            String errMsg = err.ErrorMessage();
-            
+            String errMsg = TranslateHResult(m_hRes);
+
             return std::format(L"File: {}\nLine: {}\nFunction: {}, HRESULT error code: {}, HRESULT error msg: {}",
                 m_fileName, m_lineNumber, m_functionName, static_cast<i32>(m_hRes), errMsg);
         }
@@ -72,6 +66,15 @@ namespace Illulu
     if (FAILED(__hRes))							                              \
     {										                                  \
         __debugbreak();                                                       \
+        String __fileNameW(__FILEW__);		                                  \
+        throw ILLException(__hRes, String(L#x), String(__FILEW__), __LINE__); \
+    }                                                                         \
+}
+#define WIN_CHECK_NOTHROW(x)                                                  \
+{												                              \
+    HRESULT __hRes = x;							                              \
+    if (FAILED(__hRes))							                              \
+    {										                                  \
         String __fileNameW(__FILEW__);		                                  \
         throw ILLException(__hRes, String(L#x), String(__FILEW__), __LINE__); \
     }                                                                         \

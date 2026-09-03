@@ -98,14 +98,14 @@ namespace Illulu::D3D12
         }
         std::string strA(pDescription);
         String strW = Utf8ToWide(strA);
-        
+
         String str = std::format(
-            L"Category: {}\n        ID: {}\n        Description: {}", 
+            L"Category: {}\n        ID: {}\n        Description: {}",
             InfoQueue::GetCategoryString(category),
             InfoQueue::GetIdString(id),
             strW
         );
 
-        Console::Log(logType, str);
+        Logger::Log(logType, str);
     }
 }

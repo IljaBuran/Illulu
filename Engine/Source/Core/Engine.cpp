@@ -2,11 +2,18 @@
 
 #include "Core/Console.hpp"
 
+#include <memory>
+
 namespace Illulu
 {
     Engine::Engine() noexcept
         : m_window(m_input)
     {
+        Logger::Add(std::make_unique<WindowsNativeConsole>());
+        Logger::Add(std::make_unique<ImGUIConsole>());
+
+        //WARNING(L"This is warning message");
+        //FATAL(L"This is FATAL message");
     }
 
     void Engine::Run()
@@ -16,22 +23,15 @@ namespace Illulu
         while (!m_window.ShouldClose())
         {
             _Update();
-
-            if (i32 dX = m_input.xMouseDelta, dY = m_input.yMouseDelta; dX || dY)
-            {
-                INFO(L"Delta:({},{})", dX, dY);
-            }
         }
+
+        _Shutdown();
     }
 
     void Engine::_Initialize()
     {
         INFO(L"*** ENGINE INITIALIZATION START ***");
         _ConfigureDelegates();
-
-        //FATAL(L"*** This is error message ***");
-        //WARNING(L"*** This is warning message ***");
-        //INFO(L"*** This is info message ***");
 
         m_window.OnInitialize();
         HWND hWnd = m_window.GetNativeWindowHandle();
@@ -46,16 +46,24 @@ namespace Illulu
     void Engine::_Update()
     {
         m_timer.Tick();
-        
-        m_input.OnUpdate();
-
         m_window.OnUpdate();
+
+        if (m_input.IsMouseBtnDown(MouseButton::LEFT))
+        {
+            m_renderer.m_deltaX = m_input.xMouseDelta;
+            m_renderer.m_deltaY = m_input.yMouseDelta;
+        }
 
         m_renderer.OnUpdate();
 
+        // todo: make separate function for this? OnRender()?
         m_renderer.OnRender();
+
+
+        // this needs to be last, it only resets the inner state
+        m_input.OnUpdate();
     }
-    
+
     void Engine::_Shutdown()
     {
         m_renderer.OnShutdown();

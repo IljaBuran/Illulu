@@ -4,10 +4,9 @@
 
 #include "Core/Input.hpp"
 
+#include "backends/imgui_impl_win32.h"
 
-//#include "backends/imgui_impl_win32.h"
-
-//extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 namespace Illulu
 {
@@ -97,6 +96,19 @@ namespace Illulu
 
     LRESULT Window::_HandleMessages(u32 uMsg, WPARAM wParam, LPARAM lParam) noexcept
     {
+        if (ImGui_ImplWin32_WndProcHandler(m_hWnd, uMsg, wParam, lParam))
+            return true;
+
+        ImGuiIO* imguiIo{};
+
+        if (!imguiIo)
+        {
+            if (ImGui::GetCurrentContext())
+            {
+                imguiIo = &ImGui::GetIO();
+            }
+        }
+
         static i32 newWidth{}, newHeight{};
 
         i32 xMousePos{}, yMousePos{};
@@ -142,37 +154,45 @@ namespace Illulu
 
             case WM_LBUTTONDOWN:
             {
-                m_input.NotifyMouseDown(MouseButton::LEFT);
+                if (!imguiIo || !imguiIo->WantCaptureMouse)
+                {
+                    m_input.NotifyMouseDown(MouseButton::LEFT);
+                }
                 return 0;
             }
 
             case WM_LBUTTONUP:
             {
-                m_input.NotifyMouseUp(MouseButton::LEFT);
+                if (!imguiIo || !imguiIo->WantCaptureMouse)
+                    m_input.NotifyMouseUp(MouseButton::LEFT);
                 return 0;
             }
 
             case WM_RBUTTONDOWN:
             {
-                m_input.NotifyMouseDown(MouseButton::RIGHT);
+                if (!imguiIo || !imguiIo->WantCaptureMouse)
+                    m_input.NotifyMouseDown(MouseButton::RIGHT);
                 return 0;
             }
 
             case WM_RBUTTONUP:
             {
-                m_input.NotifyMouseUp(MouseButton::RIGHT);
+                if (!imguiIo || !imguiIo->WantCaptureMouse)
+                    m_input.NotifyMouseUp(MouseButton::RIGHT);
                 return 0;
             }
 
             case WM_MBUTTONDOWN:
             {
-                m_input.NotifyMouseDown(MouseButton::MIDDLE);
+                if (!imguiIo || !imguiIo->WantCaptureMouse)
+                    m_input.NotifyMouseDown(MouseButton::MIDDLE);
                 return 0;
             }
 
             case WM_MBUTTONUP:
             {
-                m_input.NotifyMouseUp(MouseButton::MIDDLE);
+                if (!imguiIo || !imguiIo->WantCaptureMouse)
+                    m_input.NotifyMouseUp(MouseButton::MIDDLE);
                 return 0;
             }
 

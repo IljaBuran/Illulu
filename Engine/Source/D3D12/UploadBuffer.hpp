@@ -12,14 +12,14 @@ namespace Illulu::D3D12
     {
     public:
 
-        UploadBuffer(ID3D12DeviceIll* const device, u64 elementCount, bool isConstantBuffer);
+        UploadBuffer(ID3D12DeviceIll* device, u64 elementCount, bool isConstantBuffer);
 
         ~UploadBuffer();
 
         void CopyData(i32 elementIndex, const T& data);
         void CopyData(const T* data, u32 count);
 
-        ID3D12Resource* const GetResourcePtr()
+        ID3D12Resource* GetResourcePtr()
         {
             ILL_ASSERT(m_uploadBuffer);
             return m_uploadBuffer.Get();

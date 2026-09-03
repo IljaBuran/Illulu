@@ -10,6 +10,14 @@
 #include <d3d12sdklayers.h>
 #include <dxgi1_6.h>
 
+#include <dxcapi.h>
+
+#pragma comment(lib, "dxcompiler.lib")
+#pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "d3d12.lib")
+#pragma comment(lib, "DirectXTK12.lib")
+#pragma comment(lib, "dxil.lib")
+
 namespace Illulu
 {
     using Microsoft::WRL::ComPtr;
@@ -29,14 +37,14 @@ namespace Illulu
     static constexpr D3D_FEATURE_LEVEL D3D12_REQUIRED_FEATURE_LEVEL{D3D_FEATURE_LEVEL_12_2};
     static constexpr DXGI_FORMAT       DEPTH_STENCIL_FORMAT{DXGI_FORMAT_D24_UNORM_S8_UINT};
     static constexpr u32               FRAMEBUFFER_COUNT{2};
-    static constexpr u32               CBV_SRV_UAV_HEAP_CAPACITY{16'384};
+    static constexpr u32               CBV_SRV_UAV_HEAP_CAPACITY{64};
 }
 
 #include <DirectXPackedVector.h>
 #include <DirectXMath.h>
 #include <DirectXColors.h>
 
-#include <array> 
+#include "Array.hpp"
 
 namespace Illulu
 {
@@ -45,9 +53,10 @@ namespace Illulu
         DirectX::XMFLOAT3 position;
         DirectX::XMFLOAT4 color;
 
-        static constexpr const D3D12_INPUT_LAYOUT_DESC& GetInputLayoutDesc()
+        static constexpr
+        const D3D12_INPUT_LAYOUT_DESC& GetInputLayoutDesc()
         {
-            static constexpr std::array<D3D12_INPUT_ELEMENT_DESC, 2> elementDesc
+            static constexpr Array<D3D12_INPUT_ELEMENT_DESC, 2> elementDesc
             {
                 {
                     {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(ColorVertex, position), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
@@ -72,9 +81,10 @@ namespace Illulu
         DirectX::XMFLOAT2 tex0;
         DirectX::XMFLOAT2 tex1;
 
-        static constexpr const D3D12_INPUT_LAYOUT_DESC& GetInputLayoutDesc()
+        static constexpr
+        const D3D12_INPUT_LAYOUT_DESC& GetInputLayoutDesc()
         {
-            static constexpr std::array<D3D12_INPUT_ELEMENT_DESC, 4> elementDesc
+            static constexpr Array<D3D12_INPUT_ELEMENT_DESC, 4> elementDesc
             {
                 {
                     {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(Vertex2, position), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},

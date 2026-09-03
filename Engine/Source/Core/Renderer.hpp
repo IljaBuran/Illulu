@@ -5,8 +5,10 @@
 #include "Math/Math.hpp"
 
 #include "Array.hpp"
-
 #include "DX12.hpp"
+
+//#include "Core/ShaderManager.hpp"
+#include "Util/FileWatcher.hpp"
 
 #include "imgui.h"
 #include "backends/imgui_impl_win32.h"
@@ -20,6 +22,7 @@
 #include "D3D12/CommandListAllocator.hpp"
 #include "D3D12/SwapChain.hpp"
 #include "D3D12/CommandList.hpp"
+#include "D3D12/Shader.hpp"
 
 namespace Illulu
 {
@@ -32,16 +35,32 @@ namespace Illulu
         void OnRender();
         void OnShutdown();
 
+        void RecompileShader();
+
         void UpdateRenderTargetSize(i32 newWidth, i32 newHeight);
 
     private: /* Private functions */
+
+        void _ImGuiInit(HWND hWnd);
+        void _ImGuiStartFrame();
+        void _ImGuiDraw();
+        void _ImGuiShutdown();
 
         void _FeedCommandList();
         void _WaitForGpu();
         void _EndFrame();
 
+    public:
+
+        // TEMP SHIAT
+        i32 m_deltaX{};
+        i32 m_deltaY{};
+
     private: /* Private variables */
 
+        //ShaderManager       m_shaderManager{};
+        FileWatcher         m_fileWatcher;
+        
         D3D12::Device       m_device{};
         D3D12::CommandQueue m_commandQueue{};
         D3D12::SwapChain    m_swapChain;
@@ -56,7 +75,8 @@ namespace Illulu
         ComPtr<ID3D12PipelineState> m_pipelineState{};
 
         DescriptorHeap m_dsvHeap{};
-        CbvSrvUavHeap  m_cbvHeap{};
+        CbvSrvUavHeap  m_cbvSrvUavHeap{};
+
 
         /* synchronization */
         ComPtr<ID3D12FenceIll>        m_fence{};
@@ -73,6 +93,9 @@ namespace Illulu
 
         ComPtr<ID3D12Resource> m_constantBuffer{};
 
+        u32 m_cbPerObjectIndex{};
+        u32 m_cbPerPassIndex{};
+
         struct cbPerObject
         {
             DirectX::XMFLOAT4X4 M{};
@@ -86,6 +109,8 @@ namespace Illulu
         ComPtr<ID3D12Resource> m_perObjectUploadBuffer{};
         ComPtr<ID3D12Resource> m_perPassUploadBuffer{};
 
+        D3D12::Shader m_shader;
+
         byte* m_pPerObjectMapped{nullptr};
         byte* m_pPerPassMapped{nullptr};
 
@@ -94,5 +119,9 @@ namespace Illulu
         u32 m_renderTargetHeight{};
 
         bool m_initialized{false};
+
+        /* IMGUI's console */
+
+        ImGUIConsole m_imGuiConsole;
     };
 }

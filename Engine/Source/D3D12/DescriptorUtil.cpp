@@ -2,7 +2,7 @@
 
 namespace Illulu
 {
-    void DescriptorHeap::Create(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE descHeapType, u32 capacity)
+    void DescriptorHeap::Initialize(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE descHeapType, u32 capacity)
     {
         ILL_ASSERT(!m_heap);
         ILL_ASSERT(device);
@@ -21,18 +21,22 @@ namespace Illulu
         m_descriptorSize = device->GetDescriptorHandleIncrementSize(descHeapType);
     }
 
-    ID3D12DescriptorHeap* DescriptorHeap::GetHeap() const noexcept
-    {
-        ILL_ASSERT(m_heap);
-
-        return m_heap.Get();
-    }
-
     u32 DescriptorHeap::GetDescSize() const noexcept
     {
         ILL_ASSERT(m_heap);
 
         return m_descriptorSize;
+    }
+
+    u32 DescriptorHeap::GetIndex(D3D12_CPU_DESCRIPTOR_HANDLE handle) const
+    {
+        ILL_ASSERT(m_heap);
+
+        const D3D12_CPU_DESCRIPTOR_HANDLE start{m_heap->GetCPUDescriptorHandleForHeapStart()};
+
+        ILL_ASSERT(handle.ptr >= start.ptr);
+
+        return static_cast<u32>((handle.ptr - start.ptr) / m_descriptorSize);
     }
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::GetCpuHandle(u32 index) const noexcept
@@ -56,7 +60,7 @@ namespace Illulu
     void CbvSrvUavHeap::Initialize(ID3D12Device* device, u32 capacity)
     {
         ILL_ASSERT(device && capacity > 0);
-        DescriptorHeap::Create(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, capacity);
+        DescriptorHeap::Initialize(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, capacity);
 
         for (u32 i = 0; i < capacity; ++i)
             m_freeIndices.push(i);

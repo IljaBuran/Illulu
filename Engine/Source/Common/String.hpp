@@ -2,6 +2,7 @@
 
 #if defined(ILL_STL)
 #include <string>
+#include <format>
 
 using String = std::wstring;
 using StringView = std::wstring_view;
@@ -11,7 +12,7 @@ using NarrowString = std::string;
 #endif
 
 #include <WindowsMin.hpp>
-inline std::wstring Utf8ToWide(const NarrowString& str, unsigned int codePage = CP_UTF8)
+inline String Utf8ToWide(const NarrowString& str, unsigned int codePage = CP_UTF8)
 {
     if (str.empty())
     {
@@ -52,7 +53,7 @@ inline std::wstring Utf8ToWide(const NarrowString& str, unsigned int codePage = 
     return result;
 }
 
-inline std::string WideToUtf8(const String& str, unsigned int codePage = CP_UTF8)
+inline NarrowString WideToUtf8(const String& str, unsigned int codePage = CP_UTF8)
 {
     if (str.empty())
     {

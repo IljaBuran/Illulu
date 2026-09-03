@@ -62,7 +62,7 @@ namespace Illulu
 
     void Input::NotifyInvalidateMousePosition() noexcept
     {
-        INFO(L"MOUSE INVALIDATED");
+        //INFO(L"MOUSE INVALIDATED");
         mousePosInvalid = true;
     }
 
@@ -106,6 +106,9 @@ namespace Illulu
 
         m_mousePressed.reset();
         m_mouseReleased.reset();
+
+        xMouseDelta = 0;
+        yMouseDelta = 0;
     }
 
     void Input::debug_PrintState() const noexcept

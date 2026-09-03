@@ -24,12 +24,7 @@ namespace Illulu::D3D12
             u32 height
         );
         
-        void UpdateBackbufferIndex()
-        {
-            m_backbufferIndex = m_dxgiSwapChain->GetCurrentBackBufferIndex();
-        }
-
-        void Resize(ID3D12DeviceIll* const device, i32 newWidth, i32 newHeight);
+        void Resize(ID3D12DeviceIll* device, i32 newWidth, i32 newHeight);
         
         Pair<u32, u32> GetSize() const
         {
@@ -41,19 +36,24 @@ namespace Illulu::D3D12
             return m_aspectRatio;
         }
 
-        IDXGISwapChainIll* const GetSwapChainPtr()
+        void UpdateBackbufferIndex()
+        {
+            m_backbufferIndex = m_dxgiSwapChain->GetCurrentBackBufferIndex();
+        }
+
+        IDXGISwapChainIll* GetSwapChainPtr()
         {
             ILL_ASSERT(m_dxgiSwapChain);
 
             return m_dxgiSwapChain.Get();
         }
 
-        IDXGISwapChainIll* const operator->()
+        IDXGISwapChainIll* operator->()
         {
             return GetSwapChainPtr();
         }
 
-        operator IDXGISwapChainIll* const()
+        operator IDXGISwapChainIll*()
         {
             return GetSwapChainPtr();
         }
