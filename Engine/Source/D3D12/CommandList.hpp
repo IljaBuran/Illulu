@@ -41,6 +41,6 @@ namespace Illulu::D3D12
 
     private:
 
-        ComPtr <ID3D12GraphicsCommandListIll> m_d3d12CommandList;
+        ComPtr<ID3D12GraphicsCommandListIll> m_d3d12CommandList;
     };
 }

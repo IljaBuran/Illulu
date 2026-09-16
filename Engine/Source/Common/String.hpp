@@ -8,6 +8,7 @@ using String = std::wstring;
 using StringView = std::wstring_view;
 
 using NarrowString = std::string;
+using NarrowStringView = std::string_view;
 
 #endif
 

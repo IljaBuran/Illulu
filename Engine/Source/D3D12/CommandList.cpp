@@ -3,10 +3,10 @@
 namespace Illulu::D3D12
 {
     void CommandList::Create(
-        ID3D12DeviceIll* const device, 
+        ID3D12DeviceIll* device, 
         D3D12_COMMAND_LIST_TYPE type, 
-        ID3D12CommandAllocator* const allocator, 
-        ID3D12PipelineState* const initialState
+        ID3D12CommandAllocator* allocator, 
+        ID3D12PipelineState* initialState
     )
     {
         ILL_ASSERT(device && allocator);

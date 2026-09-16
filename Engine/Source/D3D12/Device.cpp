@@ -20,7 +20,7 @@ namespace Illulu::D3D12
 
                 INFO(L"Graphics Card: {} {:.0f}GB", gpuInfo.gpuName, gpuInfo.dedicatedMemoryInGBs);
                 for (const auto& d : displayInfos)
-                INFO(L"Monitor: {} {}x{}@{}Hz", d.displayName, d.width, d.height, d.refreshRate);
+                    INFO(L"Monitor: {} {}x{}@{}Hz", d.displayName, d.width, d.height, d.refreshRate);
 
                 m_infoQueue.Initialize(GetDevicePtr());
                 

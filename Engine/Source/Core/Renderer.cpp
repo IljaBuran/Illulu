@@ -12,13 +12,14 @@
 
 #include "Data.hpp"
 
+#include "Scene/Model.hpp"
+
 namespace Illulu
 {
     void Renderer::OnInitialize(HWND hWnd)
     {
         INFO(L"*** [DX12] Initialization start ***");
-
-    #pragma comment(lib, "imgui.lib")
+        #pragma comment(lib, "imgui.lib")
 
         // this should be already initialized correctly
         ILL_ASSERT(m_renderTargetHeight && m_renderTargetWidth);
@@ -58,11 +59,7 @@ namespace Illulu
         /* Initialize swap chain */
         m_swapChain.Create(factory, m_device, m_commandQueue, hWnd, m_renderTargetWidth, m_renderTargetHeight);
 
-        /* Create command list allocators */
-        for (u32 i = 0; i < FRAMEBUFFER_COUNT; i++)
-        {
-            m_commandListAllocators[i].Create(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-        }
+        _BuildFrameResources();
 
         /* Create a root signature consisting of a descriptor table with single CBV */
         {
@@ -71,17 +68,9 @@ namespace Illulu
                 .HighestVersion{ D3D_ROOT_SIGNATURE_VERSION_1_1 }
             };
 
-            Array<CD3DX12_DESCRIPTOR_RANGE1, 1> ranges{};
-            Array<CD3DX12_ROOT_PARAMETER1, 1> rootParameters{};
-
-            {
-                constexpr u32 descriptorCount{ 2 };
-                constexpr u32 shaderRegister{ 0 };
-                constexpr u32 registerSpace{ 0 };
-
-                ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, descriptorCount, shaderRegister, registerSpace, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-            }
-            rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
+            Array<CD3DX12_ROOT_PARAMETER1, 2> rootParameters{};
+            rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC, D3D12_SHADER_VISIBILITY_VERTEX); // b0: pass
+            rootParameters[1].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC, D3D12_SHADER_VISIBILITY_VERTEX); // b1: object
 
             D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags
             {
@@ -98,7 +87,13 @@ namespace Illulu
             ComPtr<ID3DBlob> signature{};
             ComPtr<ID3DBlob> error{};
 
-            WIN_CHECK(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
+            // Serialize -> it is possible to save to a file and then load it from there...
+            WIN_CHECK(D3DX12SerializeVersionedRootSignature(
+                &rootSignatureDesc, 
+                featureData.HighestVersion, 
+                &signature, 
+                &error
+            ));
 
             WIN_CHECK(m_device->CreateRootSignature(
                 0,
@@ -118,14 +113,13 @@ namespace Illulu
 
             MulticastDelegate<> del;
             del.Add<Renderer, &Renderer::RecompileShader>(this);
-
             m_fileWatcher.Intialize(L"Shaders/", L"Basic.hlsl", std::move(del));
 
             D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc
             {
                 .pRootSignature{ m_rootSignature.Get() },
-                .VS{m_shader.GetBlob(D3D12::ShaderType::VERTEX)},
-                .PS{m_shader.GetBlob(D3D12::ShaderType::PIXEL)},
+                .VS{ m_shader.GetBlob(D3D12::ShaderType::VERTEX) },
+                .PS{ m_shader.GetBlob(D3D12::ShaderType::PIXEL) },
                 .DS{},
                 .HS{},
                 .GS{},
@@ -168,7 +162,7 @@ namespace Illulu
             m_commandList.Create(
                 m_device,
                 D3D12_COMMAND_LIST_TYPE_DIRECT,
-                m_commandListAllocators[m_swapChain.m_backbufferIndex],
+                m_pCurrFrameRes->m_commandAllocator,
                 m_pipelineState.Get()
             );
 
@@ -179,15 +173,18 @@ namespace Illulu
         /* Create synchronization objects */
         {
             WIN_CHECK(m_device->CreateFence(
-                m_fenceValues[m_swapChain.m_backbufferIndex],
+                0,
                 D3D12_FENCE_FLAG_NONE,
                 IID_PPV_ARGS(&m_fence)
             ));
 
-            m_fenceValues[m_swapChain.m_backbufferIndex]++;
+            //m_fenceValues[m_swapChain.m_backbufferIndex]++;
 
             // create event handle
-            m_fenceEvent.Attach(CreateEvent(nullptr, false, false, nullptr));
+            m_fenceEvent.Attach(
+                CreateEvent(nullptr, false, false, nullptr)
+            );
+
             ILL_ASSERT(m_fenceEvent.IsValid());
         }
 
@@ -233,13 +230,13 @@ namespace Illulu
             m_uploadBuffer->Unmap(0, nullptr);
         }
 
-        // VERY IMPORTANT HERE:
-        WIN_CHECK(m_commandList->Reset(m_commandListAllocators[m_swapChain.m_backbufferIndex], nullptr));
-
+        // VERY IMPORTANT HERE: 
+        // we have closed the commandlist after it's creation, need to reopen now
+        WIN_CHECK(m_commandList->Reset(m_pCurrFrameRes->m_commandAllocator, nullptr));
 
         // transition default buffer to COPY_DEST, copy and then transition back
         {
-            D3D12_RESOURCE_BARRIER toCopyDest
+            D3D12_RESOURCE_BARRIER barrier
             {
                 CD3DX12_RESOURCE_BARRIER::Transition(
                     m_vertexIndexBufferGPU.Get(),
@@ -247,7 +244,7 @@ namespace Illulu
                     D3D12_RESOURCE_STATE_COPY_DEST)
             };
 
-            m_commandList->ResourceBarrier(1, &toCopyDest);
+            m_commandList->ResourceBarrier(1, &barrier);
 
             m_commandList->CopyBufferRegion(
                 m_vertexIndexBufferGPU.Get(), 0,
@@ -255,7 +252,7 @@ namespace Illulu
                 totalSizeNeeded
             );
 
-            D3D12_RESOURCE_BARRIER toGenericRead
+            barrier = 
             {
                 CD3DX12_RESOURCE_BARRIER::Transition(
                     m_vertexIndexBufferGPU.Get(),
@@ -263,7 +260,7 @@ namespace Illulu
                     D3D12_RESOURCE_STATE_GENERIC_READ)
             };
 
-            m_commandList->ResourceBarrier(1, &toGenericRead);
+            m_commandList->ResourceBarrier(1, &barrier);
         }
 
         // execute the copy from upload to default
@@ -273,7 +270,7 @@ namespace Illulu
             Array<ID3D12CommandList*, 1> lists{ m_commandList.GetCommandListPtr() };
             m_commandQueue->ExecuteCommandLists(static_cast<u32>(lists.size()), lists.data());
 
-            _WaitForGpu();
+            _FlushCommandQueue();
         }
 
         // create vertex buffer view
@@ -296,77 +293,100 @@ namespace Illulu
             };
         }
 
-        /* create constant buffers */
-        {
-            // PER OBJECT
-            constexpr u32 objCbSize = static_cast<u32>(AlignUp<D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT, sizeof(cbPerObject)>());
+        // TODO: use UploadBuffer instead
 
-            auto heapProps{ CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD) };
-            auto resDesc{ CD3DX12_RESOURCE_DESC::Buffer(objCbSize) };
+        m_linearAllocator = std::make_unique<GraphicsMemory>(m_device);
 
-            WIN_CHECK(m_device->CreateCommittedResource(
-                &heapProps,
-                D3D12_HEAP_FLAG_NONE,
-                &resDesc,
-                D3D12_RESOURCE_STATE_GENERIC_READ,
-                nullptr,
-                IID_PPV_ARGS(&m_perObjectUploadBuffer)
-            ));
+        ///* create constant buffers */
+        //{
+        //    // PER OBJECT
+        //    constexpr u32 objCbSize{ (u32)AlignUp(sizeof(ObjectConstants), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT) };
 
-            D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc
-            {
-                .BufferLocation{m_perObjectUploadBuffer->GetGPUVirtualAddress()},
-                .SizeInBytes{objCbSize}
-            };
+        //    auto heapProps{ CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD) };
+        //    auto resDesc{ CD3DX12_RESOURCE_DESC::Buffer(objCbSize) };
 
-            m_cbPerObjectIndex = m_cbvSrvUavHeap.GetNextFreeIndex();
-            m_device->CreateConstantBufferView(&cbvDesc, m_cbvSrvUavHeap.GetCpuHandle(m_cbPerObjectIndex));
+        //    WIN_CHECK(m_device->CreateCommittedResource(
+        //        &heapProps,
+        //        D3D12_HEAP_FLAG_NONE,
+        //        &resDesc,
+        //        D3D12_RESOURCE_STATE_GENERIC_READ,
+        //        nullptr,
+        //        IID_PPV_ARGS(&m_perObjectUploadBuffer)
+        //    ));
 
-            auto mapRange{ CD3DX12_RANGE(0, 0) };
-            m_perObjectUploadBuffer->Map(0, &mapRange, reinterpret_cast<void**>(&m_pPerObjectMapped));
+        //    D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc
+        //    {
+        //        .BufferLocation{m_perObjectUploadBuffer->GetGPUVirtualAddress()},
+        //        .SizeInBytes{objCbSize}
+        //    };
 
-            // PER PASS
-            constexpr u32 passCbSize = static_cast<u32>(AlignUp<D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT, sizeof(cbPerPass)>());
-            resDesc.Width = passCbSize;
+        //    m_cbPerObjectIndex = m_cbvSrvUavHeap.GetNextFreeIndex();
+        //    m_device->CreateConstantBufferView(&cbvDesc, m_cbvSrvUavHeap.GetCpuHandle(m_cbPerObjectIndex));
 
-            WIN_CHECK(m_device->CreateCommittedResource(
-                &heapProps,
-                D3D12_HEAP_FLAG_NONE,
-                &resDesc,
-                D3D12_RESOURCE_STATE_GENERIC_READ,
-                nullptr,
-                IID_PPV_ARGS(&m_perPassUploadBuffer)
-            ));
+        //    auto mapRange{ CD3DX12_RANGE(0, 0) };
+        //    m_perObjectUploadBuffer->Map(0, &mapRange, reinterpret_cast<void**>(&m_pPerObjectMapped));
 
-            cbvDesc =
-            {
-                .BufferLocation{m_perPassUploadBuffer->GetGPUVirtualAddress()},
-                .SizeInBytes{passCbSize}
-            };
+        //    // PER PASS
+        //    constexpr u32 passCbSize{ 
+        //        static_cast<u32>(AlignUp(sizeof(PassConstants), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT))
+        //    };
+        //    resDesc.Width = passCbSize;
 
-            m_cbPerPassIndex = m_cbvSrvUavHeap.GetNextFreeIndex();
-            m_device->CreateConstantBufferView(&cbvDesc, m_cbvSrvUavHeap.GetCpuHandle(m_cbPerPassIndex));
-            m_perPassUploadBuffer->Map(0, &mapRange, reinterpret_cast<void**>(&m_pPerPassMapped));
-        }
+        //    WIN_CHECK(m_device->CreateCommittedResource(
+        //        &heapProps,
+        //        D3D12_HEAP_FLAG_NONE,
+        //        &resDesc,
+        //        D3D12_RESOURCE_STATE_GENERIC_READ,
+        //        nullptr,
+        //        IID_PPV_ARGS(&m_perPassUploadBuffer)
+        //    ));
+
+        //    cbvDesc =
+        //    {
+        //        .BufferLocation{m_perPassUploadBuffer->GetGPUVirtualAddress()},
+        //        .SizeInBytes{passCbSize}
+        //    };
+
+        //    m_cbPerPassIndex = m_cbvSrvUavHeap.GetNextFreeIndex();
+        //    m_device->CreateConstantBufferView(&cbvDesc, m_cbvSrvUavHeap.GetCpuHandle(m_cbPerPassIndex));
+        //    m_perPassUploadBuffer->Map(0, &mapRange, reinterpret_cast<void**>(&m_pPerPassMapped));
+        //}
 
         _ImGuiInit(hWnd);
 
         m_initialized = true;
+
+        Vector<Mesh> model{ LoadModel("Assets/truck/scene.gltf") };
+
         INFO(L"*** [DX12] Initialization successful ***");
     }
 
     void Renderer::OnUpdate()
     {
-        using namespace DirectX;
-
         m_fileWatcher.OnUpdate();
+
+        m_currFrameResIdx = (m_currFrameResIdx + 1) % numFrameResources;
+        m_pCurrFrameRes = &m_frameResources[m_currFrameResIdx];
+
+        // check if we need to wait
+        if (m_pCurrFrameRes->m_fence != 0 && m_fence->GetCompletedValue() < m_pCurrFrameRes->m_fence)
+        {
+            WIN_CHECK(m_fence->SetEventOnCompletion(
+                m_pCurrFrameRes->m_fence, 
+                m_fenceEvent.Get()
+            ));
+
+            //DWORD res{ WaitForSingleObject(m_fenceEvent.Get(), INFINITE) };
+            //ILL_ASSERT(res == WAIT_OBJECT_0);
+            ILL_VERIFY(WaitForSingleObject(m_fenceEvent.Get(), INFINITE) == WAIT_OBJECT_0);
+        }
 
         // --- per object: world matrix ---
         static f32 angleX{ 0.0f };
         static f32 angleY{ 0.0f };
 
-        angleX -= XM_PI * m_deltaY / (static_cast<f32>(m_renderTargetHeight) / 2);
-        angleY -= XM_PI * m_deltaX / (static_cast<f32>(m_renderTargetWidth) / 2);
+        angleX -= XM_PI * m_deltaY / (static_cast<f32>(m_renderTargetHeight) / 2.0f);
+        angleY -= XM_PI * m_deltaX / (static_cast<f32>(m_renderTargetWidth) / 2.0f);
         
         // restrict X rotation to (-pi, pi);
         angleX = Clamp(angleX, -XM_PI / 2, XM_PI / 2);
@@ -374,23 +394,24 @@ namespace Illulu
         m_deltaX = 0;
         m_deltaY = 0;
 
-        XMMATRIX world{ XMMatrixRotationY(angleY) * XMMatrixRotationX(angleX)};
-        cbPerObject objData{};
-        XMStoreFloat4x4(&objData.M, XMMatrixTranspose(world)); // HLSL expects column-major by default, transpose row-major XMMatrix
-        memcpy(m_pPerObjectMapped, &objData, sizeof(objData));
+        // --- per object: model matrix ---
+        const XMMATRIX world{ DirectX::XMMatrixRotationY(angleY) * DirectX::XMMatrixRotationX(angleX)};
+        ObjectConstants objData{};
+        XMStoreFloat4x4(&objData.M, DirectX::XMMatrixTranspose(world)); // HLSL expects column-major by default, transpose row-major XMMatrix
+        m_objectAllocation = m_linearAllocator->AllocateConstant(objData);
 
         // --- per pass: view-projection matrix ---
-        XMVECTOR eye{ XMVectorSet(0.0f, 0.0f, -5.0f, 1.0f) };
-        XMVECTOR target{ XMVectorZero() };
-        XMVECTOR up{ XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f) };
-        XMMATRIX view{ XMMatrixLookAtLH(eye, target, up) };
+        const XMVECTOR eye{ XMVectorSet(0.0f, 0.0f, -5.0f, 1.0f) };
+        const XMVECTOR target{ XMVectorZero() };
+        const XMVECTOR up{ XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f) };
+        const XMMATRIX view{ DirectX::XMMatrixLookAtLH(eye, target, up) };
 
-        f32 aspect{ m_swapChain.GetAspectRatio() };
-        XMMATRIX proj{ XMMatrixPerspectiveFovLH(XM_PIDIV4, aspect, 0.1f, 100.0f) };
+        const f32 aspect{ m_swapChain.GetAspectRatio() };
+        const XMMATRIX proj{ DirectX::XMMatrixPerspectiveFovLH(XM_PIDIV4, aspect, 0.1f, 100.0f) };
 
-        cbPerPass passData{};
-        XMStoreFloat4x4(&passData.VP, XMMatrixTranspose(view * proj));
-        memcpy(m_pPerPassMapped, &passData, sizeof(passData));
+        PassConstants passData{}; 
+        XMStoreFloat4x4(&passData.VP, DirectX::XMMatrixTranspose(view * proj)); // HLSL expects column-major by default, transpose row-major XMMatrix
+        m_pCurrFrameRes->m_passCB.CopyData(0, passData);
     }
 
     void Renderer::OnRender()
@@ -399,7 +420,11 @@ namespace Illulu
 
         // Execute the command list.
         const Array<ID3D12CommandList*, 1> commandLists{ m_commandList };
+
+        m_linearAllocator->Commit(m_commandQueue);
+
         m_commandQueue->ExecuteCommandLists(static_cast<u32>(commandLists.size()), commandLists.data());
+        
         // Present the frame.
         WIN_CHECK(m_swapChain->Present(1, 0));
 
@@ -408,7 +433,7 @@ namespace Illulu
 
     void Renderer::OnShutdown()
     {
-        _WaitForGpu();
+        _FlushCommandQueue();
 
         _ImGuiShutdown();
 
@@ -420,8 +445,9 @@ namespace Illulu
 
     void Renderer::RecompileShader()
     {
-        _WaitForGpu();
+        _FlushCommandQueue();
 
+        // compile with permissive mode -> when fails, it won't throw
         if (!m_shader.Compile(true))
             return;
 
@@ -480,7 +506,7 @@ namespace Illulu
 
         m_pipelineState = newPso;
 
-        m_commandList->Reset(m_commandListAllocators[m_swapChain.m_backbufferIndex], m_pipelineState.Get());
+        m_commandList->Reset(m_pCurrFrameRes->m_commandAllocator, m_pipelineState.Get());
         m_commandList->SetPipelineState(m_pipelineState.Get());
         m_commandList->Close();
 
@@ -495,14 +521,14 @@ namespace Illulu
         if (!m_initialized)
             return;
 
-        _WaitForGpu();
+        _FlushCommandQueue();
 
         m_viewport =
         {
             .TopLeftX{ 0.0f },
             .TopLeftY{ 0.0f },
-            .Width{static_cast<f32>(m_renderTargetWidth)},
-            .Height{static_cast<f32>(m_renderTargetHeight)},
+            .Width{ static_cast<f32>(m_renderTargetWidth) },
+            .Height{ static_cast<f32>(m_renderTargetHeight) },
             .MinDepth{ 0.0f },
             .MaxDepth{ 1.0f }
         };
@@ -514,13 +540,6 @@ namespace Illulu
             .right{ static_cast<i32>(m_renderTargetWidth) },
             .bottom{ static_cast<i32>(m_renderTargetHeight) }
         };
-
-        const u64 fenceValue{ m_fenceValues[m_swapChain.m_backbufferIndex] };
-
-        for (u32 i{ 0 }; i < FRAMEBUFFER_COUNT; i++)
-        {
-            m_fenceValues[i] = fenceValue;
-        }
 
         m_swapChain.Resize(m_device, newWidth, newHeight);
 
@@ -539,7 +558,7 @@ namespace Illulu
         ImGui_ImplDX12_InitInfo initInfo{};
         initInfo.Device = m_device;
         initInfo.CommandQueue = m_commandQueue;
-        initInfo.NumFramesInFlight = FRAMEBUFFER_COUNT;
+        initInfo.NumFramesInFlight = numFrameResources;
         initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
         initInfo.DSVFormat = DXGI_FORMAT_UNKNOWN;
         initInfo.UserData = reinterpret_cast<void*>(&m_cbvSrvUavHeap);
@@ -566,7 +585,7 @@ namespace Illulu
 
         ILL_VERIFY(ImGui_ImplDX12_Init(&initInfo));
 
-        ImGuiIO& io = ImGui::GetIO();
+        ImGuiIO& io{ ImGui::GetIO() };
 
         io.Fonts->AddFontFromFileTTF(
             "C:/Windows/Fonts/consola.ttf",
@@ -648,13 +667,25 @@ namespace Illulu
         ImGui::DestroyContext();
     }
 
+    void Renderer::_BuildFrameResources()
+    {
+        for (auto& frameRes : m_frameResources)
+        {
+            frameRes.Create(m_device, 1);
+        }
+
+        m_currFrameResIdx = 0;
+        m_pCurrFrameRes = &m_frameResources[m_currFrameResIdx];
+    }
+
     void Renderer::_FeedCommandList()
     {
         // reset command list allocator -> this can only happen when command list associated with the allocator has finished
-        WIN_CHECK(m_commandListAllocators[m_swapChain.m_backbufferIndex]->Reset());
+        //WIN_CHECK(m_commandListAllocators[m_swapChain.m_backbufferIndex]->Reset());
+        WIN_CHECK(m_pCurrFrameRes->m_commandAllocator->Reset());
 
         // command list can be reset immediately after calling ExecuteCommandLists on it
-        WIN_CHECK(m_commandList->Reset(m_commandListAllocators[m_swapChain.m_backbufferIndex], m_pipelineState.Get()));
+        WIN_CHECK(m_commandList->Reset(m_pCurrFrameRes->m_commandAllocator, m_pipelineState.Get()));
 
         _ImGuiStartFrame();
 
@@ -664,7 +695,15 @@ namespace Illulu
         Array<ID3D12DescriptorHeap*, 1> ppHeaps{ m_cbvSrvUavHeap };
         m_commandList->SetDescriptorHeaps(static_cast<u32>(ppHeaps.size()), ppHeaps.data());
 
-        m_commandList->SetGraphicsRootDescriptorTable(0, m_cbvSrvUavHeap.GetGpuHandle(m_cbPerObjectIndex));
+        m_commandList->SetGraphicsRootConstantBufferView(
+            0, 
+            m_objectAllocation.GpuAddress()
+        );
+        m_commandList->SetGraphicsRootConstantBufferView(
+            1, 
+            m_pCurrFrameRes->m_passCB.GetResourcePtr()->GetGPUVirtualAddress()
+        );
+
         m_commandList->RSSetViewports(1, &m_viewport);
         m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
@@ -710,36 +749,33 @@ namespace Illulu
         WIN_CHECK(m_commandList->Close());
     }
 
-    void Renderer::_WaitForGpu()
+    void Renderer::_FlushCommandQueue()
     {
+        m_fenceValue++;
+        
         // Schedule a Signal command in the queue.
-        WIN_CHECK(m_commandQueue->Signal(m_fence.Get(), m_fenceValues[m_swapChain.m_backbufferIndex]));
+        WIN_CHECK(m_commandQueue->Signal(m_fence.Get(), m_fenceValue));
 
-        // Wait until the fence has been processed.
-        WIN_CHECK(m_fence->SetEventOnCompletion(m_fenceValues[m_swapChain.m_backbufferIndex], m_fenceEvent.Get()));
-        WaitForSingleObjectEx(m_fenceEvent.Get(), INFINITE, false);
+        // Wait until cmd queue reaches fence 
+        WIN_CHECK(m_fence->SetEventOnCompletion(
+            m_fenceValue, 
+            m_fenceEvent.Get()
+        ));
 
-        // Increment the fence value for the current frame.
-        m_fenceValues[m_swapChain.m_backbufferIndex]++;
+        ILL_VERIFY(WaitForSingleObjectEx(m_fenceEvent.Get(), INFINITE, false) == WAIT_OBJECT_0);
+        
+        //DWORD res{ WaitForSingleObjectEx(m_fenceEvent.Get(), INFINITE, false) };
+
+        //ILL_ASSERT(res == WAIT_OBJECT_0);
     }
 
     void Renderer::_EndFrame()
     {
         // Schedule a Signal command in the queue.
-        const u64 currentFenceValue = m_fenceValues[m_swapChain.m_backbufferIndex];
-        WIN_CHECK(m_commandQueue->Signal(m_fence.Get(), currentFenceValue));
+        WIN_CHECK(m_commandQueue->Signal(m_fence.Get(), ++m_fenceValue));
+        m_pCurrFrameRes->m_fence = m_fenceValue;
 
         // Update the frame index.
         m_swapChain.UpdateBackbufferIndex();
-
-        // If the next frame is not ready to be rendered yet, wait until it is ready.
-        if (m_fence->GetCompletedValue() < m_fenceValues[m_swapChain.m_backbufferIndex])
-        {
-            WIN_CHECK(m_fence->SetEventOnCompletion(m_fenceValues[m_swapChain.m_backbufferIndex], m_fenceEvent.Get()));
-            WaitForSingleObjectEx(m_fenceEvent.Get(), INFINITE, false);
-        }
-
-        // Set the fence value for the next frame.
-        m_fenceValues[m_swapChain.m_backbufferIndex] = currentFenceValue + 1;
     }
 }

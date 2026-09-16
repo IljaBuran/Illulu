@@ -2,6 +2,8 @@
 
 #include "Common.hpp"
 
+#include <memory>
+
 #include "Math/Math.hpp"
 
 #include "Array.hpp"
@@ -23,6 +25,9 @@
 #include "D3D12/SwapChain.hpp"
 #include "D3D12/CommandList.hpp"
 #include "D3D12/Shader.hpp"
+#include "D3D12/FrameResource.hpp"
+
+#include "GraphicsMemory.h"
 
 namespace Illulu
 {
@@ -41,13 +46,16 @@ namespace Illulu
 
     private: /* Private functions */
 
+        /* ImGui */
         void _ImGuiInit(HWND hWnd);
         void _ImGuiStartFrame();
         void _ImGuiDraw();
         void _ImGuiShutdown();
 
+
+        void _BuildFrameResources();
         void _FeedCommandList();
-        void _WaitForGpu();
+        void _FlushCommandQueue();
         void _EndFrame();
 
     public:
@@ -66,8 +74,6 @@ namespace Illulu
         D3D12::SwapChain    m_swapChain;
         D3D12::CommandList  m_commandList{};
 
-        Array<D3D12::CommandListAllocator, FRAMEBUFFER_COUNT> m_commandListAllocators;
-
         D3D12_VIEWPORT m_viewport{};
         D3D12_RECT     m_scissorRect{};
 
@@ -77,48 +83,38 @@ namespace Illulu
         DescriptorHeap m_dsvHeap{};
         CbvSrvUavHeap  m_cbvSrvUavHeap{};
 
-
         /* synchronization */
-        ComPtr<ID3D12FenceIll>        m_fence{};
-        Event                         m_fenceEvent{};
-        Array<u64, FRAMEBUFFER_COUNT> m_fenceValues{};
+        ComPtr<ID3D12FenceIll> m_fence{};
+        Event                  m_fenceEvent{};
+        u64                    m_fenceValue{};
+        
+        /* app resources */ 
 
-        /* app resources */
+        // vertex and index data
         ComPtr<ID3D12Resource> m_vertexIndexBufferGPU{};
         ComPtr<ID3D12Resource> m_uploadBuffer{};
-        byte*                  m_mappedUploadBuffer{nullptr};
-
+        byte*                  m_mappedUploadBuffer{ nullptr };
         D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView{};
         D3D12_INDEX_BUFFER_VIEW m_indexBufferView{};
 
-        ComPtr<ID3D12Resource> m_constantBuffer{};
+        // per frame constants
+        static constexpr u32 numFrameResources{ 3 };
+        Array<FrameResource, numFrameResources> m_frameResources{};
+        u8 m_currFrameResIdx{ 0 };
+        FrameResource* m_pCurrFrameRes{ nullptr };
 
-        u32 m_cbPerObjectIndex{};
-        u32 m_cbPerPassIndex{};
+        // per object
+        std::unique_ptr<GraphicsMemory> m_linearAllocator;
+        GraphicsResource m_objectAllocation;
 
-        struct cbPerObject
-        {
-            DirectX::XMFLOAT4X4 M{};
-        };
-
-        struct cbPerPass
-        {
-            DirectX::XMFLOAT4X4 VP{};
-        };
-
-        ComPtr<ID3D12Resource> m_perObjectUploadBuffer{};
-        ComPtr<ID3D12Resource> m_perPassUploadBuffer{};
-
+        // shaders
         D3D12::Shader m_shader;
-
-        byte* m_pPerObjectMapped{nullptr};
-        byte* m_pPerPassMapped{nullptr};
 
         /* render target info */
         u32 m_renderTargetWidth{};
         u32 m_renderTargetHeight{};
 
-        bool m_initialized{false};
+        bool m_initialized{ false };
 
         /* IMGUI's console */
 

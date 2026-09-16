@@ -27,17 +27,17 @@ namespace Illulu
     using IDXGIFactoryIll = IDXGIFactory6;
     using IDXGISwapChainIll = IDXGISwapChain3;
 
-    using ID3D12DeviceIll = ID3D12Device;
-    using ID3D12DebugIll = ID3D12Debug1;
-    using ID3D12FenceIll = ID3D12Fence;
-    using ID3D12CommandQueueIll = ID3D12CommandQueue;
+    using ID3D12DeviceIll              = ID3D12Device;
+    using ID3D12DebugIll               = ID3D12Debug1;
+    using ID3D12FenceIll               = ID3D12Fence;
+    using ID3D12CommandQueueIll        = ID3D12CommandQueue;
     using ID3D12GraphicsCommandListIll = ID3D12GraphicsCommandList;
-    using ID3D12InfoQueueIll = ID3D12InfoQueue1;
+    using ID3D12InfoQueueIll           = ID3D12InfoQueue1;
 
-    static constexpr D3D_FEATURE_LEVEL D3D12_REQUIRED_FEATURE_LEVEL{D3D_FEATURE_LEVEL_12_2};
-    static constexpr DXGI_FORMAT       DEPTH_STENCIL_FORMAT{DXGI_FORMAT_D24_UNORM_S8_UINT};
-    static constexpr u32               FRAMEBUFFER_COUNT{2};
-    static constexpr u32               CBV_SRV_UAV_HEAP_CAPACITY{64};
+    static constexpr D3D_FEATURE_LEVEL D3D12_REQUIRED_FEATURE_LEVEL{ D3D_FEATURE_LEVEL_12_2 };
+    static constexpr DXGI_FORMAT       DEPTH_STENCIL_FORMAT{ DXGI_FORMAT_D24_UNORM_S8_UINT };
+    static constexpr u32               FRAMEBUFFER_COUNT{ 2 };
+    static constexpr u32               CBV_SRV_UAV_HEAP_CAPACITY{ 64 };
 }
 
 #include <DirectXPackedVector.h>
@@ -48,6 +48,38 @@ namespace Illulu
 
 namespace Illulu
 {
+    struct Vertex
+    {
+        DirectX::XMFLOAT3 position;
+        DirectX::XMFLOAT3 normal;
+        //DirectX::XMFLOAT4 tangent;
+        DirectX::XMFLOAT2 tex0;
+        //DirectX::XMFLOAT2 tex1;
+
+        static constexpr
+        const D3D12_INPUT_LAYOUT_DESC& GetInputLayoutDesc()
+        {
+            static constexpr Array<D3D12_INPUT_ELEMENT_DESC, 3> elementDesc // todo: change size when changing inner structure!!!
+            {
+                {
+                    {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(Vertex, position), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+                    {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(Vertex, normal), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+                    //{"TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, offsetof(Vertex, tangent), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+                    {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, offsetof(Vertex, tex0), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+                    //{"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 0, offsetof(Vertex, tex1), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
+                }
+            };
+
+            static constexpr D3D12_INPUT_LAYOUT_DESC inputDesc
+            {
+                .pInputElementDescs{ elementDesc.data() },
+                .NumElements{ static_cast<UINT>(elementDesc.size()) }
+            };
+
+            return inputDesc;
+        }
+    };
+
     struct ColorVertex
     {
         DirectX::XMFLOAT3 position;

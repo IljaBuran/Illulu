@@ -117,7 +117,7 @@ void FileWatcher::OnUpdate()
 
         if (!res)
         {
-            DWORD err = GetLastError();
+            DWORD err{ GetLastError() };
             FATAL(L"FileWatcher: ReadDirectoryChangesW failed, Error: {}", err);
         }
     }

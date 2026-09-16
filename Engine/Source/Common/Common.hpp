@@ -16,3 +16,4 @@
 } while(0)
 
 #define UNUSED [[maybe_unused]]
+#define NODISCARD [[nodiscard]]
